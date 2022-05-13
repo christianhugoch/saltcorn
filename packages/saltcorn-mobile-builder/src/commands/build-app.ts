@@ -11,6 +11,7 @@ import {
 import { join } from "path";
 import db from "@saltcorn/data/db/index";
 import Plugin from "@saltcorn/data/models/plugin";
+import File from "@saltcorn/data/models/file";
 const { PluginManager } = require("live-plugin-manager");
 const {
   staticDependencies,
@@ -63,6 +64,7 @@ export default class BuildAppCommand extends Command {
     }
     const localUserTables = flags.localUserTables ? flags.localUserTables : [];
     this.copyStaticAssets();
+    await this.copySaltcornFiles();
     this.copySbadmin2Deps();
     this.writeCfgFile({
       entryPoint: flags.entryPoint,
@@ -92,10 +94,29 @@ export default class BuildAppCommand extends Command {
     }
     const serverRoot = join(require.resolve("@saltcorn/server"), "..");
     const srcPrefix = join(serverRoot, "public");
-    const srcFiles = ["jquery-3.6.0.min.js", "saltcorn-common.js", "saltcorn.js", "saltcorn.css"];
+    const srcFiles = [
+      "jquery-3.6.0.min.js",
+      "saltcorn-common.js",
+      "saltcorn.js",
+      "saltcorn.css",
+    ];
     for (const srcFile of srcFiles) {
       copySync(join(srcPrefix, srcFile), join(assetsDst, srcFile));
     }
+  };
+
+  copySaltcornFiles = async () => {
+    const dbRows = await File.find({ s3_store: 0 });
+    if (dbRows.length > 0) {
+      const filesDir = join(this.wwwDir, "/files/serve");
+      if (!existsSync(filesDir)) {
+        mkdirSync(filesDir, { recursive: true });
+      }
+      for (const row of dbRows) {
+        copySync(row.location, join(filesDir, `${row.id}`));
+      }
+    }
+    // TODO ch: check min_role_read (which user?)
   };
 
   copySbadmin2Deps = () => {
