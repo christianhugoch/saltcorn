@@ -485,7 +485,7 @@ const transformForm = async ({
       const view_select = parse_view_select(segment.view);
       //console.log({ view_select });
 
-      const view = await View.findOne({ name: view_select.viewname });
+      const view = View.findOne({ name: view_select.viewname });
       if (!view)
         throw new InvalidConfiguration(
           `Cannot find embedded view: ${view_select.viewname}`

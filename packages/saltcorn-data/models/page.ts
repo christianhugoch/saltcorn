@@ -81,7 +81,7 @@ class Page {
    * @param where
    * @returns {Promise<Page|*>}
    */
-  static async findOne(where: Where): Promise<Page> {
+  static findOne(where: Where): Page {
     const { getState } = require("../db/state");
     const p = getState().pages.find(
       where.id

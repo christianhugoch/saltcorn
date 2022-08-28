@@ -812,6 +812,15 @@ router.get(
               hr(),
 
               a(
+                { href: "/diagram", class: "btn btn-warning" },
+                i({ class: "fas fa-network-wired" }),
+                " ",
+                req.__("Show diagram"),
+              ),
+
+              hr(),
+
+              a(
                 { href: "/admin/clear-all", class: "btn btn-danger" },
                 i({ class: "fas fa-trash-alt" }),
                 " ",

@@ -965,6 +965,8 @@
 	"Trigger": "Trigger",
 	"Add %s to tag": "Add %s to tag",
 	"Tag %s deleted": "Tag %s deleted",
-	"Tag %s created": "Tag %s created"
-
+	"Tag %s created": "Tag %s created",
+	"Show diagram": "Show diagram",
+	"Application diagram": "Application diagram",
+	"Unable to create a diagram, no entry page was found.": "Unable to create a diagram, no entry page was found."
 }
