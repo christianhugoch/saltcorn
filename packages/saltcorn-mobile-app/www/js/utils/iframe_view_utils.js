@@ -507,7 +507,7 @@ async function local_post(url, args) {
       data: args,
     });
     if (result.redirect) await parent.handleRoute(result.redirect);
-    else common_done(result);
+    else common_done(result, false);
   } catch (error) {
     parent.errorAlert(error);
   } finally {
@@ -523,7 +523,7 @@ async function local_post_json(url) {
     });
     if (result.server_eval) await evalServerCode(url);
     if (result.redirect) await parent.handleRoute(result.redirect);
-    else common_done(result);
+    else common_done(result, false);
   } catch (error) {
     parent.errorAlert(error);
   } finally {
@@ -631,7 +631,11 @@ async function clear_state() {
   }
 }
 
-async function view_post(viewname, route, data, onDone) {
+async function view_post(viewname, route, data, onDone, sendState) {
+  const buildQuery = () => {
+    const query = parent.currentQuery();
+    return query ? `?${query}` : "";
+  };
   const mobileConfig = parent.saltcorn.data.state.getState().mobileConfig;
   const view = parent.saltcorn.data.models.View.findOne({ name: viewname });
   try {
@@ -646,9 +650,10 @@ async function view_post(viewname, route, data, onDone) {
         data,
       });
     } else {
+      const query = sendState ? buildQuery() : "";
       const response = await parent.apiCall({
         method: "POST",
-        path: "/view/" + viewname + "/" + route,
+        path: "/view/" + viewname + "/" + route + query,
         body: data,
       });
       if (response) respData = response.data;
@@ -657,7 +662,7 @@ async function view_post(viewname, route, data, onDone) {
     if (!respData)
       throw new Error(`The response of '${viewname}/${route}' is ${respData}`);
     if (onDone) onDone(respData);
-    common_done(respData);
+    common_done(respData, false);
   } catch (error) {
     parent.errorAlert(error);
   } finally {
