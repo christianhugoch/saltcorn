@@ -30,7 +30,7 @@ const {
   td,
   tbody,
 } = tags;
-const { alert, breadcrumbs, renderTabs } = require("./layout_utils");
+const { alert, toast, breadcrumbs, renderTabs } = require("./layout_utils");
 
 import helpers = require("./helpers");
 import renderMJML from "./mjml-layout";
@@ -47,7 +47,7 @@ const couldHaveAlerts = (alerts?: any | any[]): boolean =>
 
 /**
  * @param {string|any} body
- * @param {object[]} [alerts]
+ * @param {object[]} [toasts]
  * @returns {object}
  */
 const makeSegments = (body: string | any, alerts: any[]): any => {
@@ -56,8 +56,14 @@ const makeSegments = (body: string | any, alerts: any[]): any => {
         {
           type: "blank",
           contents: div(
-            { id: "alerts-area" },
-            (alerts || []).map((a: any) => alert(a.type, a.msg))
+            {
+              id: "toasts-area",
+              class: "toast-container position-fixed top-0 start-50 p-0",
+              style: "z-index: 999;",
+              "aria-live": "polite",
+              "aria-atomic": "true",
+            },
+            (toasts || []).map((a: any) => toast(a.type, a.msg))
           ),
         },
       ]
@@ -65,12 +71,12 @@ const makeSegments = (body: string | any, alerts: any[]): any => {
 
   if (typeof body === "string")
     return {
-      above: [...alertsSegments, { type: "blank", contents: body }],
+      above: [...toastSegments, { type: "blank", contents: body }],
     };
   else if (body.above) {
-    if (couldHaveAlerts(alerts)) body.above.unshift(alertsSegments[0]);
+    if (couldHaveAlerts(toasts)) body.above.unshift(toastSegments[0]);
     return body;
-  } else return { above: [...alertsSegments, body] };
+  } else return { above: [...toastSegments, body] };
 };
 
 /**

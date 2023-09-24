@@ -13,6 +13,7 @@ const {
   hr,
   div,
   text,
+  strong,
   img,
   button,
   nav,
@@ -308,11 +309,6 @@ const navbar = (
     )
   );
 
-/**
- * @param {string} type
- * @param {string} s
- * @returns {string}
- */
 const alert = (type: string, s: string): string => {
   //console.log("alert", type, s,s.length)
   const realtype = type === "error" ? "danger" : type;
@@ -331,6 +327,57 @@ const alert = (type: string, s: string): string => {
         </button>
       </div>`
     : "";
+};
+
+/**
+ * @param {string} type
+ * @param {string} s
+ * @returns {string}
+ */
+const toast = (type: string, s: string, fullWrap?: boolean): string => {
+  const realtype = type === "error" ? "danger" : type;
+  const icon =
+    realtype === "success"
+      ? "fa-check-circle"
+      : realtype === "danger"
+      ? "fa-times-circle"
+      : realtype === "warning"
+      ? "fa-exclamation-triangle"
+      : "";
+  const toastDiv = div(
+    {
+      class: "toast text-white show",
+      role: "alert",
+      ariaLive: "assertive",
+      ariaAtomic: "true",
+      style:
+        "min-width: 350px; max-width: 50vw; width: auto; transform: translateX(-50%);",
+    },
+    div(
+      { class: `toast-header bg-${type} bg-opacity-75 text-white py-1` },
+      icon ? i({ class: `fas ${icon} me-2` }) : "",
+      strong({ class: "me-auto" }, type),
+      button({
+        type: "button",
+        class: "btn-close btn-close-white",
+        "data-bs-dismiss": "toast",
+        "aria-label": "Close",
+        style: "font-size: 12px;",
+      })
+    ),
+    div({ class: `toast-body bg-${type} bg-opacity-75 py-2 fs-6 fw-bold` }, s)
+  );
+  return fullWrap
+    ? div(
+        {
+          class: "position-fixed top-0 start-50 p-0",
+          style: "z-index: 999",
+          "aria-live": "polite",
+          "aria-atomic": "true",
+        },
+        toastDiv
+      )
+    : toastDiv;
 };
 
 /**
@@ -670,6 +717,7 @@ const renderTabs = (
 export = {
   navbar,
   alert,
+  toast,
   logit,
   navbarSolidOnScroll,
   breadcrumbs,
