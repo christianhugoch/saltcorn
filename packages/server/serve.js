@@ -396,7 +396,15 @@ const setupSocket = (...servers) => {
   io.use(wrap(passport.authenticate(["jwt", "session"])));
   if (process.send && !cluster.isMaster) io.adapter(createAdapter());
   getState().setRoomEmitter((tenant, viewname, room_id, msg) => {
-    io.to(`${tenant}_${viewname}_${room_id}`).emit("message", msg);
+    io.timeout(10000).emit("message", (err, responses) => {
+      if (err) {
+        console.log(err);
+        // some clients did not acknowledge the event in the given delay
+      } else {
+        console.log(responses); // one response per client
+      }
+    });
+    // io.to(`${tenant}_${viewname}_${room_id}`).emit("message", msg);
   });
   io.on("connection", (socket) => {
     socket.on("join_room", ([viewname, room_id]) => {

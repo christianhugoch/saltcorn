@@ -1261,7 +1261,11 @@ function init_room(viewname, room_id) {
     if (msg.append) $(`.msglist-${room_id}`).append(msg.append);
     if (msg.pls_ack_msg_id)
       view_post(viewname, "ack_read", { room_id, id: msg.pls_ack_msg_id });
-  });
+  
+    msg();
+    }
+  
+  );
 
   $(`form.room-${room_id}`).submit((e) => {
     e.preventDefault();
