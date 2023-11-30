@@ -279,6 +279,8 @@ export async function prepareArtistsAlbumRelation() {
   const artists = await Table.create("artists");
   const albums = await Table.create("albums");
   const artistPlaysOnAlbum = await Table.create("artist_plays_on_album");
+  const tracksOnAlbum = await Table.create("tracks_on_album");
+
   await Field.create({
     table: artists,
     name: "name",
@@ -319,6 +321,15 @@ export async function prepareArtistsAlbumRelation() {
   });
   await Field.create({
     table: artistPlaysOnAlbum,
+    name: "album",
+    reftable: albums,
+    label: "Album",
+    type: "Key",
+    attributes: { summary_field: "name" },
+  });
+
+  await Field.create({
+    table: tracksOnAlbum,
     name: "album",
     reftable: albums,
     label: "Album",
@@ -382,6 +393,38 @@ export async function prepareArtistsAlbumRelation() {
       show_view: "edit_album",
       descending: false,
       view_to_create: "edit_album",
+      create_view_display: "Link",
+    },
+    min_role: 100,
+  });
+
+  await View.create({
+    table_id: tracksOnAlbum.id,
+    name: "edit_tracks_on_album",
+    viewtemplate: "Edit",
+    configuration: {
+      columns: [{ type: "Field", field_name: "album", state_field: "on" }],
+      layout: {
+        above: [{ type: "field", fieldview: "show", field_name: "album" }],
+      },
+    },
+    min_role: 100,
+  });
+
+  await View.create({
+    table_id: tracksOnAlbum.id,
+    name: "tracks_on_album_feed",
+    viewtemplate: "Feed",
+    configuration: {
+      cols_lg: 1,
+      cols_md: 1,
+      cols_sm: 1,
+      cols_xl: 1,
+      in_card: false,
+      viewname: "tracks_on_album_feed",
+      show_view: "edit_tracks_on_album",
+      descending: false,
+      view_to_create: "edit_tracks_on_album",
       create_view_display: "Link",
     },
     min_role: 100,

@@ -308,87 +308,6 @@ const calcfldViewConfig = async (fields, isEdit, nrecurse = 2) => {
   return fieldViewConfigForms;
 };
 
-/**
- * helper for 'get_inbound_relation_opts'
- * @param {Table} targetTbl table to check for an Inbound relation
- * @param {Table} srcTable table of the top view
- * @param {string[]} levelPath inbound levels already visited
- * @param {*} tableCache helper cache so that we don't have to call Table.findOne() all the time
- * @param {*} fieldCache helper cache so that we don't have to call Field.find() all the time
- * @returns
- */
-const get_inbound_path_suffixes = async (
-  targetTbl,
-  srcTable,
-  levelPath,
-  tableCache,
-  fieldCache
-) => {
-  const result = [];
-  // fks from targetTbl
-  for (const fkToRelTbl of targetTbl.getForeignKeys()) {
-    const relTblName = fkToRelTbl.reftable_name;
-    if (relTblName === srcTable.name) continue;
-    // inbounds to the target of fk
-    const inboundFks = fieldCache[relTblName]
-      ? fieldCache[relTblName].filter(
-          (field) =>
-            field.table_id !== targetTbl.id &&
-            !levelPath.find(
-              (val) => val.tbl === targetTbl.name && val.fk === fkToRelTbl.name
-            )
-        )
-      : [];
-    for (const inboundFk of inboundFks) {
-      const inboundTable = tableCache[inboundFk.table_id];
-      if (inboundTable) {
-        const relTblRefs = inboundTable
-          .getForeignKeys()
-          .filter((f) => f.reftable_name === relTblName);
-        // the inbound comes from 'srcTable'
-        if (inboundTable.id === srcTable.id) {
-          const levels = levelPath.map((val) => val.fk).join(".");
-          for (const inboundRelTblKey of relTblRefs) {
-            const newSuffix = `.${srcTable.name}.${inboundRelTblKey.name}.${
-              targetTbl.name
-            }$${fkToRelTbl.name}${levels ? `.${levels}` : ""}`;
-            if (result.indexOf(newSuffix) === -1) {
-              result.push(newSuffix);
-            }
-          }
-        } else {
-          // check if there are refs to 'srcTable'
-          const srcRefs = inboundTable
-            .getForeignKeys()
-            .filter((f) => f.reftable_name === srcTable.name);
-          for (const srcTblRef of srcRefs) {
-            for (const relTblRef of relTblRefs) {
-              if (levelPath.length > 0) {
-                let levels = `${levelPath[0].tbl}$${fkToRelTbl.name}`;
-                for (let i = 0; i < levelPath.length; i++) {
-                  levels = `${levels}.${levelPath[i].fk}`;
-                }
-                const newSuffix =
-                  `.${srcTable.name}.${inboundTable.name}$${srcTblRef.name}.${relTblRef.name}.` +
-                  `${levels}`;
-                if (result.indexOf(newSuffix) === -1) {
-                  result.push(newSuffix);
-                }
-              } else {
-                const newSuffix = `.${srcTable.name}.${inboundTable.name}$${srcTblRef.name}.${relTblRef.name}.${targetTbl.name}$${fkToRelTbl.name}`;
-                if (result.indexOf(newSuffix) === -1) {
-                  result.push(newSuffix);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  return result;
-};
-
 const tableFieldCache = async () => {
   const tableIdCache = {};
   const tableNameCache = {};
@@ -407,129 +326,56 @@ const tableFieldCache = async () => {
   return { tableIdCache, tableNameCache, fieldCache };
 };
 
-/**
- * search for relations where an in select to source is possible
- * @param {Table} source
- * @param {string} viewname
- * @returns
- */
-const get_inbound_relation_opts = async (source, viewname, cache) => {
-  const { tableIdCache, fieldCache } = cache ? cache : await tableFieldCache();
-  const allTables = await Table.find({}, { cached: true });
-  const result = [];
-  const search = async (table, path, rootTable, visited) => {
-    const visitedCopy = new Set(visited);
-    const suffixes = await get_inbound_path_suffixes(
-      table,
-      source,
-      path,
-      tableIdCache,
-      fieldCache
-    );
-    if (suffixes.length > 0) {
-      const views = await View.find_table_views_where(
-        rootTable.id,
-        ({ state_fields, viewrow }) =>
-          viewrow.name !== viewname &&
-          !state_fields.some((sf) => sf.name === "id")
-      );
-      for (const suffix of suffixes) {
-        result.push({ path: suffix, views });
-      }
-    }
-    if (!visitedCopy.has(table.name)) {
-      visitedCopy.add(table.name);
-      for (const inboundFk of fieldCache[table.name] || []) {
-        if (inboundFk.table_id === table.id) continue;
-        const inboundTbl = tableIdCache[inboundFk.table_id];
-        await search(
-          inboundTbl,
-          [{ tbl: inboundTbl.name, fk: inboundFk.name }, ...path],
-          rootTable,
-          visitedCopy
-        );
-      }
-    }
-  };
-  // search in reverse,
-  // start with the target (table of the subview) to the relation source
-  for (const table of allTables) {
-    const visited = new Set();
-    await search(table, [], table, visited);
-  }
-  return result;
-};
-
-/**
- * Get all relation options where source has a key to another table (refTable)
- * and refTable has a key to source.
- * Otherwise one could use a OneToOneShow from refTable.
- * @param {Table} source
- * @param {string} viewname name of the topview
- * @returns viewnames mapped to arrays of Inbound options
- */
-const get_inbound_self_relation_opts = async (source, viewname) => {
-  const fields = await Field.find(
-    {
-      reftable_name: source.name,
-      is_unique: true,
-    },
-    { cached: true }
-  );
-  const result = [];
-  const targetFields = source.getForeignKeys();
-  for (const field of fields) {
-    const refTable = Table.findOne({ id: field.table_id });
-    const fromTargetToRef = targetFields.filter(
-      (field) => field.reftable_name === refTable.name
-    );
-    if (fromTargetToRef.length > 0) {
-      const views = await View.find_table_views_where(
-        source,
-        ({ state_fields, viewrow }) =>
-          viewrow.name !== viewname &&
-          state_fields.some((sf) => sf.name === "id")
-      );
-      for (const toRef of fromTargetToRef) {
-        result.push({
-          path: `.${source.name}.${toRef.name}.${field.name}`,
-          views,
-        });
-      }
-    }
-  }
-  return result;
-};
-
-/**
- * Get all relations where a many to many relation through a join table is possible
- * @param {Table} source Top view table
- * @param {string} viewname Top view
- * @returns an array with the relation paths and the matching views
- */
-const get_many_to_many_relation_opts = async (source, viewname, cache) => {
+const get_relations_recursive = async (source, viewname, cache) => {
   const result = [];
   const { tableIdCache, tableNameCache, fieldCache } = cache
     ? cache
     : await tableFieldCache();
-  for (const jTblToSource of fieldCache[source.name] || []) {
-    const joinTbl = tableIdCache[jTblToSource.table_id];
-    const jTblFks = joinTbl
+
+  const maxDepth = getState().getConfig("max_relations_layer_depth", 6);
+  const searcher = async (current, path, visited) => {
+    if (path.length > maxDepth) return;
+    const visitedFkCopy = new Set(visited);
+    const fks = current
       .getForeignKeys()
-      .filter((f) => f.id !== jTblToSource.id);
-    for (const jTblToTarget of jTblFks) {
-      const targetTbl = tableNameCache[jTblToTarget.reftable_name];
+      .filter((f) => !visitedFkCopy.has(f.id));
+    for (const fk of fks) {
+      visitedFkCopy.add(fk.id);
+      const target = tableNameCache[fk.reftable_name];
+      const newPath = [...path, fk.name];
       const views = await View.find_table_views_where(
-        targetTbl,
+        target,
         ({ state_fields, viewrow }) =>
-          viewrow.name !== viewname && state_fields.every((sf) => !sf.required)
+          viewrow.name !== viewname &&
+          (state_fields.every((sf) => !sf.required) ||
+            state_fields.some((sf) => sf.name === "id"))
       );
-      result.push({
-        path: `.${source.name}.${joinTbl.name}$${jTblToSource.name}.${jTblToTarget.name}`,
-        views,
-      });
+      if (views.length > 0) result.push({ path: newPath.join("."), views });
+      await searcher(target, newPath, visitedFkCopy);
     }
-  }
+
+    const visitedInboundCopy = new Set(visited);
+    const inbounds = (fieldCache[current.name] || []).filter(
+      (f) => !visitedInboundCopy.has(f.id)
+    );
+    for (const inbound of inbounds) {
+      visitedInboundCopy.add(inbound.id);
+      const target = tableIdCache[inbound.table_id];
+      const newPath = [...path, `${target.name}$${inbound.name}`];
+      const views = await View.find_table_views_where(
+        target,
+        ({ state_fields, viewrow }) =>
+          viewrow.name !== viewname &&
+          (state_fields.every((sf) => !sf.required) ||
+            state_fields.some((sf) => sf.name === "id"))
+      );
+      if (views.length > 0) result.push({ path: newPath.join("."), views });
+      await searcher(target, newPath, visitedInboundCopy);
+    }
+  };
+  const path = [`.${source.name}`];
+  const visited = new Set();
+  await searcher(source, path, visited);
   return result;
 };
 
@@ -641,40 +487,8 @@ const get_link_view_opts = async (table, viewname, accept = () => true) => {
     });
   });
   const cache = await tableFieldCache();
-  const inbound_rel_opts = await get_inbound_relation_opts(
-    table,
-    viewname,
-    cache
-  );
-  for (const { path, views } of inbound_rel_opts) {
-    for (const view of views) {
-      link_view_opts_push({
-        view: view.name,
-        label: `${view.name} [${view.viewtemplate} ${table.name}]`,
-        name: path,
-        relation: path,
-      });
-    }
-  }
-
-  const self_inbounds = await get_inbound_self_relation_opts(table, viewname);
-  for (const { path, views } of self_inbounds) {
-    for (const view of views) {
-      link_view_opts_push({
-        view: view.name,
-        label: `${view.name} [${view.viewtemplate} ${table.name}]`,
-        name: path,
-        relation: path,
-      });
-    }
-  }
-
-  const many_to_many = await get_many_to_many_relation_opts(
-    table,
-    viewname,
-    cache
-  );
-  for (const { path, views } of many_to_many) {
+  const genRelatiosn = await get_relations_recursive(table, viewname, cache);
+  for (const { path, views } of genRelatiosn) {
     for (const view of views) {
       link_view_opts_push({
         view: view.name,
@@ -2319,8 +2133,6 @@ module.exports = {
   run_action_column,
   json_list_to_external_table,
   add_free_variables_to_joinfields,
-  get_inbound_relation_opts,
-  get_inbound_self_relation_opts,
-  get_many_to_many_relation_opts,
   build_schema_fk_options,
+  get_relations_recursive,
 };

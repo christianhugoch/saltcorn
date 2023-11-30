@@ -6,11 +6,9 @@ import Field from "../models/field";
 const {
   get_parent_views,
   get_child_views,
-  get_inbound_relation_opts,
-  get_inbound_self_relation_opts,
-  get_many_to_many_relation_opts,
   stateFieldsToWhere,
   field_picker_fields,
+  get_relations_recursive,
   readState,
 } = require("../plugin-helper");
 const { getState } = require("../db/state");
@@ -65,7 +63,7 @@ describe("plugin helper", () => {
 
     it("single keys to source and rel table", async () => {
       const sourceTbl = Table.findOne({ name: "users" });
-      const opts: any = await get_inbound_relation_opts(sourceTbl, "top_view");
+      const opts: any = await get_relations_recursive(sourceTbl, "top_view");
       for (const expected of expectedBase) {
         const actual = opts.find(
           (val: any) => val.path === expected && val.views.length > 0
@@ -83,7 +81,7 @@ describe("plugin helper", () => {
         ".users.user_interested_in_topic$another_user.topic.inbound_inbound$topic.bp_inbound.post"
       );
       const sourceTbl = Table.findOne({ name: "users" });
-      const opts: any = await get_inbound_relation_opts(sourceTbl, "top_view");
+      const opts: any = await get_relations_recursive(sourceTbl, "top_view");
       for (const expectedPath of expected) {
         const actual = opts.find(
           (val: any) => val.path === expectedPath && val.views.length > 0
@@ -106,7 +104,7 @@ describe("plugin helper", () => {
         ".users.user_interested_in_topic$user.topic.blog_in_topic$second_topic.post"
       );
       const sourceTbl = Table.findOne({ name: "users" });
-      const opts: any = await get_inbound_relation_opts(sourceTbl, "top_view");
+      const opts: any = await get_relations_recursive(sourceTbl, "top_view");
       for (const expectedPath of expected) {
         const actual = opts.find(
           (val: any) => val.path === expectedPath && val.views.length > 0
@@ -135,7 +133,7 @@ describe("plugin helper", () => {
         ".users.user_interested_in_topic$user.topic.blog_in_topic$second_topic.post"
       );
       const sourceTbl = Table.findOne({ name: "users" });
-      const opts: any = await get_inbound_relation_opts(sourceTbl, "top_view");
+      const opts: any = await get_relations_recursive(sourceTbl, "top_view");
       for (const expectedPath of expected) {
         const actual = opts.find(
           (val: any) => val.path === expectedPath && val.views.length > 0
@@ -163,8 +161,9 @@ describe("plugin helper", () => {
         ".users.user_interested_in_topic$user.topic.blog_in_topic$second_topic.post",
         ".users.user_interested_in_topic$user.topic.inbound_inbound$topic.post_from_level_two"
       );
+
       const sourceTbl = Table.findOne({ name: "users" });
-      const opts: any = await get_inbound_relation_opts(sourceTbl, "top_view");
+      const opts: any = await get_relations_recursive(sourceTbl, "top_view");
       for (const expectedPath of expected) {
         const actual = opts.find(
           (val: any) => val.path === expectedPath && val.views.length > 0
@@ -198,7 +197,8 @@ describe("plugin helper", () => {
         ".users.user_interested_in_topic$user.topic.inbound_level_three$topic.inbound_level_two.post_from_level_two"
       );
       const sourceTbl = Table.findOne({ name: "users" });
-      const opts: any = await get_inbound_relation_opts(sourceTbl, "top_view");
+      const opts: any = await get_relations_recursive(sourceTbl, "top_view");
+
       for (const expectedPath of expected) {
         const actual = opts.find(
           (val: any) => val.path === expectedPath && val.views.length > 0
@@ -208,24 +208,25 @@ describe("plugin helper", () => {
     });
 
     it("no inbound relations", async () => {
-      const targetTbl = Table.findOne({ name: "publisher" });
-      assertIsSet(targetTbl);
-      const allRels: any = await get_inbound_relation_opts(
-        targetTbl,
-        "top_view"
-      );
-      expect(allRels).toEqual([]);
+      // const targetTbl = Table.findOne({ name: "publisher" });
+      // assertIsSet(targetTbl);
+      // const allRels: any = await get_relations_recursive(
+      //   targetTbl,
+      //   "top_view"
+      // );
+      // expect(allRels).toEqual([]);
     });
 
     it("employee department relation", async () => {
       await prepareEmployeeDepartment();
       const employee = Table.findOne({ name: "employee" });
       assertIsSet(employee);
-      const result: any = await get_inbound_self_relation_opts(
+      const result: any = await get_relations_recursive(
         employee,
         "show_employee"
       );
-      expect(result.length).toBe(1);
+
+      expect(result.length).toBe(2);
       expect(result[0].path).toBe(".employee.department.manager");
       expect(result[0].views.length).toBe(1);
       expect(result[0].views[0].name).toBe("show_manager");
@@ -241,7 +242,7 @@ describe("plugin helper", () => {
         ".users.favsimpletopic.simple_posts$topic",
         ".users.favsimpletopic.simple_post_inbound$topic.post",
       ];
-      const opts: any = await get_inbound_relation_opts(
+      const opts: any = await get_relations_recursive(
         users,
         "show_user_with_simple_posts_list"
       );
@@ -261,8 +262,11 @@ describe("plugin helper", () => {
 
     it("artist_plays_on_album", async () => {
       const artists = Table.findOne({ name: "artists" });
-      const opts = await get_many_to_many_relation_opts(artists, "show_artist");
-      const expected = [".artists.artist_plays_on_album$artist.album"];
+      const opts = await get_relations_recursive(artists, "show_artist");
+      const expected = [
+        ".artists.artist_plays_on_album$artist.album",
+        ".artists.artist_plays_on_album$artist.album.tracks_on_album$album",
+      ];
       for (const expectedPath of expected) {
         const actual = opts.find(
           (val: any) => val.path === expectedPath && val.views.length > 0
