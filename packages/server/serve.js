@@ -398,6 +398,11 @@ const setupSocket = (...servers) => {
   getState().setRoomEmitter((tenant, viewname, room_id, msg) => {
     io.to(`${tenant}_${viewname}_${room_id}`).emit("message", msg);
   });
+
+  getState().setLogEmitter((tenant, time, level, msg) => {
+    io.to(`_logs_${tenant}_`).emit("log_msg", { text: msg, time, level });
+  });
+
   io.on("connection", (socket) => {
     socket.on("join_room", ([viewname, room_id]) => {
       const ten = get_tenant_from_req(socket.request) || "public";
@@ -418,5 +423,23 @@ const setupSocket = (...servers) => {
       if (ten && ten !== "public") db.runWithTenant(ten, f);
       else f();
     });
+
+    socket.on("join_log_room", () => {
+      const tenant = get_tenant_from_req(socket.request) || "public";
+      const f = () => {
+        try {
+          socket.join(`_logs_${tenant}_`);
+        } catch (err) {
+          getState().log(1, `Socket join_logs stream: ${err.stack}`);
+        }
+      };
+      if (tenant && tenant !== "public") db.runWithTenant(tenant, f);
+      else f();
+      socket.join();
+    });
   });
+
+  // io.on("disconnect", (socket) => {
+
+  // });
 };

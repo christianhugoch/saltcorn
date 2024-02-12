@@ -1413,6 +1413,48 @@ function init_room(viewname, room_id) {
   });
 }
 
+function logLevelColor(level) {
+  // TODO check level names
+  switch (parseInt(level)) {
+    case 5:
+      return "text-danger";
+    case 4:
+      return "text-success";
+    case 3:
+      return "text-warning";
+    case 2:
+      return "text-info";
+    case 1:
+      return "text-white";
+  }
+  return "";
+}
+
+const options = {
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+};
+
+function init_log_socket() {
+  const socket = io({ transports: ["websocket"] });
+  socket.emit("join_log_room", "public");
+  socket.on("log_msg", (msg) => {
+    $("#log_id").append(`
+        <div class="row">
+          <div class="col-sm-2 text-center">
+            ${new Date(msg.time).toLocaleDateString("de-DE", options)}
+          </div>
+          <div class="col-sm-10 ${logLevelColor(msg.level)}">
+            ${msg.text}
+          </div>
+        </div>
+      `);
+  });
+}
+
 function cancel_form(form) {
   if (!form) return;
   $(form).trigger("reset");

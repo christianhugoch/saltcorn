@@ -2540,6 +2540,27 @@ router.post(
     }
   })
 );
+
+router.get(
+  "/dev/logs_viewer",
+  isAdmin,
+  error_catcher(async (req, res) => {
+    res.sendWrap(req.__(`Logs viewer`), {
+      above: [
+        {
+          type: "card",
+          title: req.__("Logs viewer"),
+          contents: div({ class: "container ms-0 ps-0", id: "log_id" }),
+        },
+        script({
+          src: `/static_assets/${db.connectObj.version_tag}/socket.io.min.js`,
+        }),
+        script(domReady(`init_log_socket();`)),
+      ],
+    });
+  })
+);
+
 /**
  * Dev / Admin
  */
@@ -2573,10 +2594,36 @@ admin_config_route({
       req,
       active_sub: "Development",
       contents: {
-        type: "card",
-        title: req.__("Development settings"),
-        titleAjaxIndicator: true,
-        contents: [renderForm(form, req.csrfToken())],
+        above: [
+          {
+            type: "card",
+            title: req.__("Development settings"),
+            titleAjaxIndicator: true,
+            contents: [renderForm(form, req.csrfToken())],
+          },
+          {
+            type: "card",
+            title: req.__("Runtime informations"),
+            contents: [
+              div(
+                { class: "row form-group" },
+                a(
+                  { class: "d-block", href: "dev/logs_viewer" },
+                  req.__("open logs viewer")
+                ),
+                i("This opens a log viewer with current server log messages")
+              ),
+              div(
+                { class: "row form-group" },
+                a(
+                  { class: "d-block", href: "dev/logs_viewer" },
+                  req.__("open remote debugger")
+                ),
+                i("This opens a a remote debugger on the server")
+              ),
+            ],
+          },
+        ],
       },
     });
   },
