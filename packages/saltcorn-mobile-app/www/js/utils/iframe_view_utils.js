@@ -186,6 +186,7 @@ async function login(e, entryPoint, isSignup) {
       config.user_name = decodedJwt.user.email;
       config.user_id = decodedJwt.user.id;
       config.language = decodedJwt.user.language;
+      config.full_user = decodedJwt.user;
       config.isPublicUser = false;
       config.isOfflineMode = false;
       await parent.insertUser({
@@ -462,6 +463,10 @@ async function gopage(n, pagesize, viewIdentifier, extra) {
     },
     parent.currentLocation()
   );
+}
+
+function ajax_modal(url, opts = {}) {
+  mobile_modal(url, opts);
 }
 
 async function mobile_modal(url, opts = {}) {
