@@ -10,6 +10,7 @@
     </edit-config>
     <config-file parent="/manifest" target="AndroidManifest.xml">
       <uses-permission android:name="android.permission.WAKE_LOCK" />
+      <uses-permission android:name="com.android.vending.BILLING" />
     </config-file>
     <preference name="Scheme" value="http"/>
     <preference name="MixedContentMode" value="2"/>

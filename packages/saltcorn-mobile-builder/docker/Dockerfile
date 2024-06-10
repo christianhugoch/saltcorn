@@ -32,6 +32,7 @@ RUN cordova plugin add cordova-plugin-inappbrowser@5.0.0
 RUN cordova plugin add cordova-plugin-network-information@3.0.0
 RUN cordova plugin add cordova-plugin-geolocation@4.1.0
 RUN cordova plugin add cordova-plugin-camera@6.0.0
+RUN cordova plugin add cordova-plugin-purchase@13.11.1
 RUN cordova platform add android
 ENV ANDROID_SDK_ROOT=/android_sdk
 ENV ANDROID_HOME=/android_sdk

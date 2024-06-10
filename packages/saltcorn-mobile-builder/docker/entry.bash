@@ -30,10 +30,11 @@ npm run add-plugin /init_project/project/plugins/cordova-sqlite-ext
 npm run add-plugin /init_project/project/plugins/cordova-plugin-network-information
 npm run add-plugin /init_project/project/plugins/cordova-plugin-geolocation
 npm run add-plugin /init_project/project/plugins/cordova-plugin-camera
+npm run add-plugin /init_project/project/plugins/cordova-plugin-purchase
 
 if [ -n "$KEYSTORE_FILE" ]; then
   echo "building signed app with keystore"
-  cordova build android --"$BUILD_TYPE" -- --keystore="$KEYSTORE_FILE" --alias="$KEYSTORE_ALIAS" --storePassword="$KEYSTORE_PASSWORD" --password="$KEYSTORE_PASSWORD"
+  cordova build android --"$BUILD_TYPE" -- --packageType apk --keystore="$KEYSTORE_FILE" --alias="$KEYSTORE_ALIAS" --storePassword="$KEYSTORE_PASSWORD" --password="$KEYSTORE_PASSWORD"
 else
   echo "building unsigned app"
   cordova build android --"$BUILD_TYPE"

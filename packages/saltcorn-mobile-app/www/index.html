@@ -290,9 +290,44 @@
         await replaceIframe(page.content);
       };
 
+      const setupInAppPurchase = async () => {
+        const refreshUI = (product) => {
+          console.log("Product updated", product);
+        };
+
+        const finishPurchase = (transaction) => {
+          console.log("finishPurchase", transaction);
+        };
+
+        const { store, ProductType, Platform } = CdvPurchase;
+        const registerRes = store.register([
+          {
+            type: ProductType.CONSUMABLE,
+            id: "my_test_produkt_id",
+            platform: Platform.GOOGLE_PLAY,
+          },
+        ]);
+
+        store.when().productUpdated(refreshUI).approved(finishPurchase);
+        try {
+          const initErrors = await store.initialize([Platform.GOOGLE_PLAY]);
+          const product = store.get("my_test_produkt_id", Platform.GOOGLE_PLAY);
+          if (!product) throw new Error("Product not found");
+          const offer = product.getOffer();
+          console.log("Product offer", offer);
+          const myTransaction = store.findInLocalReceipts(product);
+          console.log("Product transaction ", myTransaction);
+          console.log("order Fn ", offer.order);
+
+        } catch (error) {
+          console.log("Error in setupInAppPurchase", error);
+        }
+      };
+
       // device is ready
       const init = async () => {
         try {
+          await setupInAppPurchase();
           document.addEventListener("resume", onResume, false);
           const config = await readJSON(
             "config",
