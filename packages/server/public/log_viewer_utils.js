@@ -10,6 +10,7 @@ var logViewerHelpers = (() => {
     second: "2-digit",
   };
   let lostConnection = false;
+  let waitingForTestMessage = false;
 
   const logLevelColor = (level) => {
     switch (parseInt(level)) {
@@ -109,6 +110,15 @@ var logViewerHelpers = (() => {
               text: "You are connected again",
             });
           }
+          waitingForTestMessage = true;
+          setTimeout(() => {
+            if (waitingForTestMessage) {
+              notifyAlert({
+                type: "danger",
+                text: "You are connected but not receiving any messages",
+              });
+            }
+          }, 5000);
         } else if (ack.status === "error" && ack.msg) {
           notifyAlert({
             type: "danger",
@@ -127,6 +137,10 @@ var logViewerHelpers = (() => {
         });
       }
     });
+  };
+
+  const handleTestConnMsg = () => {
+    waitingForTestMessage = false;
   };
 
   return {
@@ -152,6 +166,7 @@ var logViewerHelpers = (() => {
       socket.on("connect", () => handleConnect(socket));
       socket.on("disconnect", handleDisconnect);
       socket.on("log_msg", handleLogMsg);
+      socket.on("test_conn_msg", handleTestConnMsg);
     },
     goToLogsPage: (n) => {
       currentPage = n;
