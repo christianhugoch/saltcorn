@@ -6,6 +6,7 @@ import type User from "@saltcorn/data/models/user";
 import utils = require("@saltcorn/data/utils");
 const { fileWithEnding, safeEnding } = utils;
 import File from "@saltcorn/data/models/file";
+import { writePodfile, modifyGradleConfig } from "./common-build-utils";
 
 export type CapacitorCfg = {
   buildDir: string;
@@ -68,15 +69,26 @@ export class CapacitorHelper {
       this.capSync();
       if (this.isAndroid) {
         if (this.keyStoreFile && this.keyStoreAlias && this.keyStorePassword)
-          this.modifyGradleConfig();
+          modifyGradleConfig(
+            this.buildDir,
+            this.keyStoreFile,
+            this.keyStoreAlias,
+            this.keyStorePassword
+          );
         this.gradleBuild();
       }
-      if (this.isIOS) this.xCodeBuild();
+      if (this.isIOS) {
+        writePodfile(this.buildDir);
+        this.xCodeBuild();
+      }
     } else this.buildWithDocker();
   }
 
   public tryCopyAppFiles(copyDir: string, user: User, appName?: string) {
-    const copyHelper = async (ending: "apk" | "aab", apkBuildDir: string) => {
+    const copyHelper = async (
+      ending: "apk" | "aab" | "ipa",
+      apkBuildDir: string
+    ) => {
       const appFile = fileWithEnding(apkBuildDir, `.${ending}`);
       if (appFile) {
         const dstFile = appName
@@ -99,6 +111,7 @@ export class CapacitorHelper {
     if (!existsSync(copyDir)) mkdirSync(copyDir);
     copyHelper(ending, appDir);
     // ipa
+    copyHelper("ipa", this.buildDir);
   }
 
   private addPlatforms() {
@@ -176,31 +189,6 @@ export class CapacitorHelper {
       );
   }
 
-  private modifyGradleConfig() {
-    const gradleFile = join(this.buildDir, "android", "app", "build.gradle");
-    const gradleContent = readFileSync(gradleFile, "utf8");
-    const newGradleContent = gradleContent
-      .replace(
-        /release\s*{/,
-        `release { 
-            signingConfig signingConfigs.release`
-      )
-      .replace(
-        /buildTypes\s*{/,
-        `
-      signingConfigs {
-          release {
-              keyAlias '${this.keyStoreAlias}'
-              keyPassword '${this.keyStorePassword}'
-              storeFile file('${this.keyStoreFile}')
-              storePassword '${this.keyStorePassword}'
-          }
-        }
-    buildTypes {`
-      );
-    writeFileSync(gradleFile, newGradleContent, "utf8");
-  }
-
   private gradleBuild() {
     const result = spawnSync(
       "./gradlew",
@@ -249,16 +237,17 @@ export class CapacitorHelper {
   private xCodeBuild() {
     try {
       console.log("xcodebuild -workspace");
+
+      // xcodebuild archive -workspace App.xcworkspace -scheme App -configuration Release -archivePath ./build/App.xcarchive
       let buffer = execSync(
         `xcodebuild -workspace ios/App/App.xcworkspace ` +
           `-scheme App -destination "generic/platform=iOS" ` +
           `-archivePath MyArchive.xcarchive archive PROVISIONING_PROFILE="${this.provisioningGUUID}" ` +
           ' CODE_SIGN_STYLE="Manual" CODE_SIGN_IDENTITY="iPhone Distribution" ' +
-          ` DEVELOPMENT_TEAM="${this.appleTeamId}" ` +
-          ' EXPANDED_CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED="NO" CODE_SIGNING_ALLOWED="NO"',
+          ` DEVELOPMENT_TEAM="${this.appleTeamId}" `,
         { cwd: this.buildDir }
       );
-      console.log(buffer.toString());
+
       if (!existsSync(join(this.buildDir, "MyArchive.xcarchive"))) {
         console.log(
           "Unable to export ipa: xcodebuild did not create the archivePath."
