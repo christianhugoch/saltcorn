@@ -204,13 +204,8 @@ router.post(
         req.flash("error", msg);
         res.redirect("/auth/login");
       } else res.json({ error: msg });
-    } else if (!getState().getConfig("pwa_share_to_enabled", false)) {
-      const msg = req.__("Sharing not enabled");
-      if (!req.smr) {
-        req.flash("error", msg);
-        res.redirect("/");
-      } else res.json({ error: msg });
     } else {
+      console.log("role is not 100");
       Trigger.emitEvent("ReceiveMobileShareData", null, req.user, {
         row: req.body,
       });
