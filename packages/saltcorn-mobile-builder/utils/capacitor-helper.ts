@@ -7,15 +7,11 @@ import utils = require("@saltcorn/data/utils");
 const { safeEnding } = utils;
 import File from "@saltcorn/data/models/file";
 import {
-  writePodfile,
   modifyGradleConfig,
   modifyAndroidManifest,
   writeDataExtractionRules,
   writeNetworkSecurityConfig,
   copyPrepopulatedDb,
-  modifyInfoPlist,
-  writePrivacyInfo,
-  modifyXcodeProjectFile,
 } from "./common-build-utils";
 
 import type { IosCfg } from "../mobile-builder";
@@ -90,13 +86,7 @@ export class CapacitorHelper {
         }
       }
     } else this.buildWithDocker();
-    if (this.isIOS) {
-      modifyXcodeProjectFile(this.buildDir, this.appVersion, this.iosParams!);
-      writePodfile(this.buildDir);
-      await modifyInfoPlist(this.buildDir);
-      writePrivacyInfo(this.buildDir);
-      this.xCodeBuild();
-    }
+    if (this.isIOS) this.xCodeBuild();
   }
 
   public tryCopyAppFiles(copyDir: string, user: User, appName?: string) {
