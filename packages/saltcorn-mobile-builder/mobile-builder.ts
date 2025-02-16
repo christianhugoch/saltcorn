@@ -210,31 +210,31 @@ export class MobileBuilder {
 
   public async finishStep() {
     try {
-      if (this.appIcon) prepAppIcon(this.buildDir, this.appIcon);
-      copyServerFiles(this.buildDir);
-      await copySiteLogo(this.buildDir);
-      copyTranslationFiles(this.buildDir);
-      writeCfgFile({
-        buildDir: this.buildDir,
-        entryPoint: this.entryPoint,
-        entryPointType: this.entryPointType,
-        serverPath: this.serverURL ? this.serverURL : "http://10.0.2.2:3000", // host localhost of the android emulator
-        localUserTables: this.localUserTables,
-        synchedTables: this.synchedTables,
-        tenantAppName: this.tenantAppName,
-        autoPublicLogin: this.autoPublicLogin,
-        allowOfflineMode: this.allowOfflineMode,
-        allowShareTo: this.allowShareTo,
-      });
-      let resultCode = await bundlePackagesAndPlugins(
-        this.buildDir,
-        this.plugins
-      );
-      if (resultCode !== 0) return resultCode;
-      resultCode = bundleMobileAppCode(this.buildDir);
-      if (resultCode !== 0) return resultCode;
+      // if (this.appIcon) prepAppIcon(this.buildDir, this.appIcon);
+      // copyServerFiles(this.buildDir);
+      // await copySiteLogo(this.buildDir);
+      // copyTranslationFiles(this.buildDir);
+      // writeCfgFile({
+      //   buildDir: this.buildDir,
+      //   entryPoint: this.entryPoint,
+      //   entryPointType: this.entryPointType,
+      //   serverPath: this.serverURL ? this.serverURL : "http://10.0.2.2:3000", // host localhost of the android emulator
+      //   localUserTables: this.localUserTables,
+      //   synchedTables: this.synchedTables,
+      //   tenantAppName: this.tenantAppName,
+      //   autoPublicLogin: this.autoPublicLogin,
+      //   allowOfflineMode: this.allowOfflineMode,
+      //   allowShareTo: this.allowShareTo,
+      // });
+      // let resultCode = await bundlePackagesAndPlugins(
+      //   this.buildDir,
+      //   this.plugins
+      // );
+      // if (resultCode !== 0) return resultCode;
+      // resultCode = bundleMobileAppCode(this.buildDir);
+      // if (resultCode !== 0) return resultCode;
       await loadAllPlugins();
-      await copyPublicDirs(this.buildDir);
+      // await copyPublicDirs(this.buildDir);
       await buildTablesFile(this.buildDir, this.includedPlugins);
       if (this.splashPage)
         await prepareSplashPage(
@@ -244,22 +244,23 @@ export class MobileBuilder {
           this.tenantAppName,
           this.user
         );
-      resultCode = await createSqliteDb(this.buildDir);
-      if (resultCode !== 0) return resultCode;
+        return 0;
+      // resultCode = await createSqliteDb(this.buildDir);
+      // if (resultCode !== 0) return resultCode;
 
-      if (this.platforms.includes("ios")) await this.handleIosPlatform();
-      if (this.platforms.includes("android"))
-        await this.handleAndroidPlatform();
-      this.capacitorHelper.generateAssets();
-      await this.capacitorHelper.buildApp();
-      if (resultCode === 0 && this.copyTargetDir) {
-        this.capacitorHelper.tryCopyAppFiles(
-          this.copyTargetDir,
-          this.user!,
-          this.appName
-        );
-      }
-      return resultCode;
+      // if (this.platforms.includes("ios")) await this.handleIosPlatform();
+      // if (this.platforms.includes("android"))
+      //   await this.handleAndroidPlatform();
+      // this.capacitorHelper.generateAssets();
+      // await this.capacitorHelper.buildApp();
+      // if (resultCode === 0 && this.copyTargetDir) {
+      //   this.capacitorHelper.tryCopyAppFiles(
+      //     this.copyTargetDir,
+      //     this.user!,
+      //     this.appName
+      //   );
+      // }
+      // return resultCode;
     } catch (e: any) {
       console.error(e);
       return 1;

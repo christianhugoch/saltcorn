@@ -169,6 +169,7 @@ class Field implements AbstractField {
       if (o.table.id && !o.table_id) this.table_id = o.table.id;
     }
     this.in_auto_save = o.in_auto_save;
+    this.excludeFromMobile = o.excludeFromMobile;
   }
 
   /**

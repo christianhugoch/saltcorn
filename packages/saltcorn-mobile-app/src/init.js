@@ -318,7 +318,9 @@ export async function init({
     state.registerPlugin("base", saltcorn.base_plugin);
     state.registerPlugin("sbadmin2", saltcorn.sbadmin2);
     collectPluginHeaders(await loadPlugins(state));
-    if (updateNeeded) await updateDb(tablesSchema);
+    if (updateNeeded) {
+       await updateDb(tablesSchema);
+    }
     await createSyncInfoTables(mobileConfig.synchedTables);
     await initJwt();
     await state.refresh_tables();

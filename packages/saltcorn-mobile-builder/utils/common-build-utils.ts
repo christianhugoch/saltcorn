@@ -33,39 +33,39 @@ export function prepareBuildDir(buildDir: string, templateDir: string) {
   if (existsSync(buildDir)) rmSync(buildDir, { force: true, recursive: true });
   copySync(templateDir, buildDir);
   rmSync(`${buildDir}/node_modules`, { recursive: true, force: true });
-  let result = spawnSync("npm", ["install"], {
-    cwd: buildDir,
-  });
-  console.log(result.output.toString());
+  // let result = spawnSync("npm", ["install"], {
+  //   cwd: buildDir,
+  // });
+  // console.log(result.output.toString());
 
-  console.log("installing capacitor deps and plugins");
-  const capDepsAndPlugins = [
-    "@capacitor/cli@6.1.2",
-    "@capacitor/core@6.1.2",
-    "@capacitor/assets@3.0.5",
-    "@capacitor/filesystem@6.0.2",
-    "@capacitor/camera@6.1.1",
-    "@capacitor/geolocation@6.0.2",
-    "@capacitor/network@6.0.3",
-    "@capacitor-community/sqlite@6.0.2",
-    "@capacitor/screen-orientation@6.0.3",
-    "send-intent",
-  ];
-  result = spawnSync("npm", ["install", ...capDepsAndPlugins], {
-    cwd: buildDir,
-    maxBuffer: 1024 * 1024 * 10,
-  });
-  console.log(result.output.toString());
+  // console.log("installing capacitor deps and plugins");
+  // const capDepsAndPlugins = [
+  //   "@capacitor/cli@6.1.2",
+  //   "@capacitor/core@6.1.2",
+  //   "@capacitor/assets@3.0.5",
+  //   "@capacitor/filesystem@6.0.2",
+  //   "@capacitor/camera@6.1.1",
+  //   "@capacitor/geolocation@6.0.2",
+  //   "@capacitor/network@6.0.3",
+  //   "@capacitor-community/sqlite@6.0.2",
+  //   "@capacitor/screen-orientation@6.0.3",
+  //   "send-intent",
+  // ];
+  // result = spawnSync("npm", ["install", ...capDepsAndPlugins], {
+  //   cwd: buildDir,
+  //   maxBuffer: 1024 * 1024 * 10,
+  // });
+  // console.log(result.output.toString());
 
-  console.log("installing cordova plugins");
-  const cordovaPlugins = [
-    "cordova-plugin-file@8.1.3",
-    "cordova-plugin-inappbrowser@6.0.0",
-  ];
-  result = spawnSync("npm", ["install", ...cordovaPlugins], {
-    cwd: buildDir,
-    maxBuffer: 1024 * 1024 * 10,
-  });
+  // console.log("installing cordova plugins");
+  // const cordovaPlugins = [
+  //   "cordova-plugin-file@8.1.3",
+  //   "cordova-plugin-inappbrowser@6.0.0",
+  // ];
+  // result = spawnSync("npm", ["install", ...cordovaPlugins], {
+  //   cwd: buildDir,
+  //   maxBuffer: 1024 * 1024 * 10,
+  // });
 }
 
 export interface ScCapacitorConfig {
@@ -744,6 +744,51 @@ export async function buildTablesFile(
   buildDir: string,
   includedPlugins?: string[]
 ) {
+  const state = getState();
+  if (!state) throw new Error("Unable to get the state object");
+  await state.refresh_config(true);
+
+  const filterFunc = async (table: string, rows: any) => {
+    switch (table) {
+      case "_sc_plugins":
+        const included = rows.filter((plugin: any) =>
+          includedPlugins ? includedPlugins.includes(plugin.name) : true
+        );
+        return await Promise.all(included.map(async (plugin: any) => {
+          let module = state.plugins[plugin.name];
+          if (!module) {
+            module = state.plugins[state.plugin_module_names[plugin.name]];
+          }
+          if (module?.configuration_workflow) {
+            // @ts-ignore
+            const flow = module.configuration_workflow({});
+            for (const step of  flow.steps || []) {
+              if (step.form) {
+                const form = await step.form({});
+                console.log(form);
+                for (const field of form.fields || []) {
+                  if (field.excludeFromMobile) {
+                    delete plugin.configuration[field.name];
+                  }
+                }
+              }
+            }        
+          }
+          return plugin;
+        }));
+      case "_sc_config":
+        const allCfgs = state.configs;
+        return rows.filter((row: any) => {
+          const cfg = allCfgs[row.key];
+          return (
+            cfg && !(cfg.excludeFromMobile || cfg.input_type === "password")
+          );
+        });
+      default:
+        return rows;
+    }
+  };
+
   const wwwDir = join(buildDir, "www", "data");
   const scTables = (await db.listScTables()).filter(
     (table: Row) =>
@@ -760,13 +805,7 @@ export async function buildTablesFile(
       const dbData = await db.select(row.name);
       return {
         table: row.name,
-        rows:
-          row.name !== "_sc_plugins"
-            ? dbData
-            : dbData.filter(
-                (plugin: any) =>
-                  !includedPlugins || includedPlugins.includes(plugin.name)
-              ),
+        rows: await filterFunc(row.name, dbData),
       };
     })
   );

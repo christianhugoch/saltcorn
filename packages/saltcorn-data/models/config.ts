@@ -20,14 +20,12 @@ const defaultTimezone = tz.guess();
  * @category saltcorn-data
  */
 const configTypes: ConfigTypes = {
-  /** @type {object} */
   site_name: {
     type: "String",
     label: "Site name",
     default: "Saltcorn",
     blurb: "A short string which is the name of your site",
   },
-  /** @type {object} */
   timezone: {
     type: "String",
     label: "Home Timezone",
@@ -37,7 +35,6 @@ const configTypes: ConfigTypes = {
       selectizable: true,
     },
   },
-  /** @type {object} */
   site_logo_id: {
     type: "File",
     label: "Site logo",
@@ -47,7 +44,6 @@ const configTypes: ConfigTypes = {
     },
     blurb: "Select a publicly accessible image file for the menu logo",
   },
-  /** @type {object} */
   favicon_id: {
     type: "File",
     label: "Favicon",
@@ -57,7 +53,6 @@ const configTypes: ConfigTypes = {
     },
     blurb: "Select a publicly accessible image file for the browser tab icon",
   },
-  /** @type {object} */
   base_url: {
     type: "String",
     label: "Base URL",
@@ -88,69 +83,56 @@ const configTypes: ConfigTypes = {
     blurb:
       "This is an object to remember the settings of the mobile builder menu.",
   },
-  /** @type {object} */
   menu_items: { type: "hidden", label: "Menu items" },
-  /** @type {object} */
   unrolled_menu_items: { type: "hidden", label: "Menu items" },
 
-  /** @type {object} */
   globalSearch: { type: "hidden", label: "Global search" },
-  /** @type {object} */
   available_packs: {
     type: "hidden",
     label: "Available packs",
     excludeFromSnapshot: true,
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   available_packs_fetched_at: {
     type: "Date",
     label: "Available packs fetched",
     excludeFromSnapshot: true,
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   available_plugins: {
     type: "hidden",
     label: "Available plugins",
     excludeFromSnapshot: true,
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   available_plugins_fetched_at: {
     type: "Date",
     excludeFromSnapshot: true,
     label: "Available plugins fetched",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   home_page_by_role: { type: "hidden", label: "Home Page by Role" },
-  /** @type {object} */
   exttables_min_role_read: {
     type: "hidden",
     label: "Home Page by Role",
     default: {},
   },
-  /** @type {object} */
   public_home: { type: "String", label: "Public home page", default: "" },
-  /** @type {object} */
   user_home: { type: "String", label: "User home page", default: "" },
-  /** @type {object} */
   staff_home: { type: "String", label: "Staff home page", default: "" },
-  /** @type {object} */
   admin_home: { type: "String", label: "Admin home page", default: "" },
-  /** @type {object} */
   layout_by_role: { type: "hidden", label: "Layout by role", default: {} },
-  /** @type {object} */
   twofa_policy_by_role: {
     type: "hidden",
     label: "2FA policy by role",
     default: {},
   },
-  /** @type {object} */
   allow_signup: {
     type: "Bool",
     label: "Allow signups",
     default: true,
     blurb: "Allow users to sign up for a new user account",
   },
-  /** @type {object} */
   allow_forgot: {
     type: "Bool",
     label: "Allow password reset",
@@ -158,7 +140,6 @@ const configTypes: ConfigTypes = {
     blurb:
       "Allow users to request a password reset email. Email must be configured.",
   },
-  /** @type {object} */
   login_menu: {
     type: "Bool",
     label: "Login in menu",
@@ -172,7 +153,6 @@ const configTypes: ConfigTypes = {
     blurb:
       "Show a link on the login menu to continue as public user. Only on mobile logins.",
   },
-  /** @type {object} */
   cookie_sessions: {
     type: "Bool",
     label: "Cookie sessions",
@@ -180,8 +160,8 @@ const configTypes: ConfigTypes = {
     root_only: true,
     restart_required: true,
     blurb: "Store sessions entirely in client cookies for higher performance",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   new_user_form: {
     type: "View users",
     label: "New user view",
@@ -189,34 +169,31 @@ const configTypes: ConfigTypes = {
     blurb:
       "A view to show to new users, to finalise registration (if Edit) or as a welcome view",
   },
-  /** @type {object} */
   user_settings_form: {
     type: "View users",
     label: "User settings form",
     default: "",
     blurb: "A view for users to change their custom user fields",
   },
-  /** @type {object} */
   login_form: {
     type: "View users",
     label: "Login view",
     blurb: "A view with the login form",
     default: "",
   },
-  /** @type {object} */
   signup_form: {
     type: "View users",
     label: "Signup view",
     blurb: "A view with the signup form",
     default: "",
   },
-  /** @type {object} */
   verification_view: {
     type: "View users",
     label: "Verification view",
     blurb:
       "A view with the view to be emailed to users for email address verification",
     default: "",
+    excludeFromMobile: true,
   },
   logout_url: {
     type: "String",
@@ -224,7 +201,6 @@ const configTypes: ConfigTypes = {
     blurb: "The URL to direct to after logout",
     default: "/auth/login",
   },
-  /** @type {object} */
   elevate_verified: {
     type: "Role",
     label: "Elevate verified to role",
@@ -237,8 +213,8 @@ const configTypes: ConfigTypes = {
     default: false,
     blurb:
       "Send plaintext password changes to Users table triggers (Insert, Update and Validate).",
+    excludeFromMobile: true, // unsure
   },
-  /** @type {object} */
   signup_role: {
     type: "Role",
     label: "Signup role",
@@ -246,7 +222,6 @@ const configTypes: ConfigTypes = {
     default: "80",
     required: true,
   },
-  /** @type {object} */
   min_role_upload: {
     type: "Role",
     label: "Role to upload files",
@@ -254,8 +229,8 @@ const configTypes: ConfigTypes = {
     required: true,
     blurb:
       "User should have this role or higher to upload files with API (uploads through forms are not affected)",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   min_role_apikeygen: {
     type: "Role",
     label: "Role to generate API keys",
@@ -263,17 +238,16 @@ const configTypes: ConfigTypes = {
     required: true,
     blurb:
       "User should have this role or higher to generate API keys in their user settings",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   email_mask: {
     type: "String",
     label: "Email mask",
     default: "",
     blurb: "Emails used for signup must end with this string",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
-  installed_packs: { type: "String[]", label: "Installed packs", default: [] },
-  /** @type {object} */
+  installed_packs: { type: "String[]", label: "Installed packs", default: [], excludeFromMobile: true, },
   log_sql: {
     type: "Bool",
     label: "Log SQL to stdout",
@@ -284,7 +258,6 @@ const configTypes: ConfigTypes = {
     },
     blurb: "Print all SQL statements to the standard output",
   },
-  /** @type {object} */
   log_client_errors: {
     type: "Bool",
     label: "Log client errors",
@@ -293,7 +266,6 @@ const configTypes: ConfigTypes = {
     root_only: true,
     blurb: "Record all client errors in the crash log",
   },
-  /** @type {object} */
   npm_available_js_code: {
     type: "String",
     label: "NPM packages in code",
@@ -308,7 +280,6 @@ const configTypes: ConfigTypes = {
       });
     },
   },
-  /** @type {object} */
   multitenancy_enabled: {
     type: "Bool",
     root_only: true,
@@ -320,7 +291,6 @@ const configTypes: ConfigTypes = {
       set_multitenancy_cfg(val);
     },
   },
-  /** @type {object} */
   role_to_create_tenant: {
     type: "Role",
     label: "Role to create tenants",
@@ -328,8 +298,8 @@ const configTypes: ConfigTypes = {
     default: "1",
     required: true,
     root_only: true,
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   create_tenant_warning: {
     type: "Bool",
     label: "Create tenant warning",
@@ -337,8 +307,8 @@ const configTypes: ConfigTypes = {
     root_only: true,
     blurb:
       "Show a warning to users creating a tenant disclaiming warranty of availability or security",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   create_tenant_warning_text: {
     type: "String",
     fieldview: "textarea",
@@ -346,13 +316,14 @@ const configTypes: ConfigTypes = {
     default: "",
     root_only: true,
     blurb: "Provide your own create warning text if need",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   tenant_template: {
     type: "Tenant",
     label: "New tenant template",
     blurb: "Copy site structure for new tenants from this tenant",
     root_only: true,
+    excludeFromMobile: true,
   },
   tenant_baseurl: {
     type: "String",
@@ -360,27 +331,32 @@ const configTypes: ConfigTypes = {
     label: "Tenant Base URL",
     blurb:
       "Base hostname for newly created tenants. If unset, defaults to hostname",
+    excludeFromMobile: true,
   },
   tenant_create_unauth_redirect: {
     type: "String",
     root_only: true,
     label: "Redirect unauthorized",
     blurb: "If tenant creation is not authorized, redirect to this URL",
+    excludeFromMobile: true,
   },
   tenants_install_git: {
     type: "Bool",
     root_only: true,
     label: "Install git plugins",
+    excludeFromMobile: true, // unsure
   },
   tenants_set_npm_modules: {
     type: "Bool",
     root_only: true,
     label: "Set available npm modules",
+    excludeFromMobile: true, // unsure
   },
   tenants_unsafe_plugins: {
     type: "Bool",
     root_only: true,
     label: "Unsafe modules",
+    excludeFromMobile: true, // unsure
   },
   tenant_inherit_cfgs: {
     type: "String",
@@ -389,15 +365,15 @@ const configTypes: ConfigTypes = {
     helpTopic: "Configuration keys",
     blurb:
       "Comma-separated list of configuration settings tenants inherit from root. Ex: <code>site_name, smtp_host, allow_signup</code>",
+    excludeFromMobile: true, // unsure
   },
-  /** @type {object} */
   tenant_letsencrypt_sites: {
     type: "hidden",
     root_only: true,
     label: "Tenant LetsEncrypt sites",
     default: [],
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   development_mode: {
     type: "Bool",
     label: "Development mode",
@@ -406,22 +382,21 @@ const configTypes: ConfigTypes = {
     blurb:
       "Disable JS/CSS asset caching, show full error to user on crash, enable editing field type",
   },
-  /** @type {object} */
   smtp_host: {
     type: "String",
     label: "SMTP host",
     default: "",
     blurb:
       "The host address of your SMTP server. For instance, smtp.postmarkapp.com",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   smtp_username: {
     type: "String",
     label: "SMTP username",
     default: "",
     blurb: "The user name to access SMTP server for sending emails.",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   smtp_password: {
     type: "String",
     label: "SMTP password",
@@ -431,21 +406,22 @@ const configTypes: ConfigTypes = {
       "The user password or app password to access SMTP server for sending emails. " +
       "If your SMTP provider allows to create app password for using from application " +
       "We recommends to use app password instead of user password.",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   smtp_port: {
     type: "Integer",
     label: "SMTP port",
     default: "25",
     blurb: "The port of your SMTP server",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   smtp_secure: {
     type: "Bool",
     label: "Force TLS",
     default: false,
     sublabel:
       "Always use TLS when connecting to server? If unchecked, TLS is used if server supports the STARTTLS extension. In most cases check this box if you are connecting to port 465. For port 587 or 25 keep it unchecked",
+    excludeFromMobile: true,
   },
   smtp_allow_self_signed: {
     type: "Bool",
@@ -453,16 +429,16 @@ const configTypes: ConfigTypes = {
     default: false,
     sublabel:
       "Open a connection to TLS server with self-signed or invalid TLS certificate",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   email_from: {
     type: "String",
     label: "Email from address",
     default: "",
     blurb:
       "The email address from which emails are sent. For instance, hello@saltcorn.com",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   custom_ssl_certificate: {
     type: "String",
     fieldview: "textarea",
@@ -470,8 +446,8 @@ const configTypes: ConfigTypes = {
     default: "",
     excludeFromSnapshot: true,
     hide_value: true,
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   custom_ssl_private_key: {
     type: "String",
     fieldview: "textarea",
@@ -479,8 +455,8 @@ const configTypes: ConfigTypes = {
     hide_value: true,
     excludeFromSnapshot: true,
     default: "",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   letsencrypt: {
     label: "LetsEncrypt enabled",
     default: false,
@@ -488,8 +464,8 @@ const configTypes: ConfigTypes = {
     root_only: true,
     excludeFromSnapshot: true,
     blurb: "Enable SSL certificate from Let's Encrypt for HTTPS traffic",
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   timeout: {
     type: "Integer",
     label: "HTTP timeout (s)",
@@ -498,26 +474,23 @@ const configTypes: ConfigTypes = {
     restart_required: true,
     sublabel: "Increase if you expect large uploads",
   },
-  /** @type {object} */
   latest_npm_version: {
     type: "hidden",
     label: "Latest npm version cache",
     excludeFromSnapshot: true,
     default: {},
+    excludeFromMobile: true,
   },
-  /** @type {object} */
   event_log_settings: {
     type: "hidden",
     label: "Event log settings",
     default: {},
   },
-  /** @type {object} */
   custom_events: {
     type: "hidden",
     label: "Custom events",
     default: [],
   },
-  /** @type {object} */
   page_custom_css: {
     input_type: "code",
     label: "Custom CSS",
@@ -525,7 +498,6 @@ const configTypes: ConfigTypes = {
     hide_value: true,
     attributes: { mode: "text/css" },
   },
-  /** @type {object} */
   page_custom_html: {
     input_type: "code",
     label: "Custom HTML",
@@ -533,7 +505,6 @@ const configTypes: ConfigTypes = {
     hide_value: true,
     attributes: { mode: "text/html" },
   },
-  /** @type {object} */
   custom_http_headers: {
     input_type: "code",
     label: "Custom HTTP headers",
@@ -542,21 +513,18 @@ const configTypes: ConfigTypes = {
     hide_value: true,
     attributes: { mode: "message/http" },
   },
-  /** @type {object} */
   next_hourly_event: {
     type: "Date",
     label: "Next hourly event",
     excludeFromSnapshot: true,
     default: null,
   },
-  /** @type {object} */
   next_daily_event: {
     type: "Date",
     label: "Next daily event",
     default: null,
     excludeFromSnapshot: true,
   },
-  /** @type {object} */
   next_weekly_event: {
     type: "Date",
     label: "Next weekly event",
@@ -569,19 +537,16 @@ const configTypes: ConfigTypes = {
     sublabel: "Locale identifier short code, e.g. en, zh, fr, ar etc. ",
     default: "en",
   },
-  /** @type {object} */
   localizer_languages: {
     type: "hidden",
     label: "Localizer languages",
     default: {},
   },
-  /** @type {object} */
   localizer_strings: {
     type: "hidden",
     label: "Localizer strings",
     default: {},
   },
-  /** @type {object} */
   legacy_file_id_locations: {
     type: "hidden",
     label: "Legacy file_id locations",
@@ -602,6 +567,7 @@ const configTypes: ConfigTypes = {
     label: "Cookie duration (hours)",
     sublabel: "Set to 0 for expiration at the end of browser session",
     default: 30 * 24,
+    excludeFromMobile: true,
   },
   cookie_samesite: {
     input_type: "select",
@@ -612,6 +578,7 @@ const configTypes: ConfigTypes = {
       "Restrict use of cookie to third-party sites. Strict is more secure, but may impact authentication",
     default: "Unset",
     options: ["Unset", "None", "Lax", "Strict"],
+    excludeFromMobile: true,
   },
   content_security_policy: {
     input_type: "select",
@@ -620,6 +587,7 @@ const configTypes: ConfigTypes = {
     options: ["Disabled", "Enabled"],
     restart_required: true,
     root_only: true,
+    excludeFromMobile: true,
   },
   cors_enabled: {
     type: "Bool",
@@ -628,7 +596,10 @@ const configTypes: ConfigTypes = {
     default: true,
     restart_required: true,
     root_only: true,
+    excludeFromMobile: true,
   },
+
+  // continue from here
   public_cache_maxage: {
     type: "Integer",
     label: "Public cache TTL (minutes)",
@@ -656,7 +627,6 @@ const configTypes: ConfigTypes = {
       "Allow embedding in iframe on different domains. Unsets the X-Frame-Options header",
     default: false,
   },
-  /** @type {object} */
   storage_s3_enabled: {
     type: "Bool",
     label: "Use Amazon S3",
@@ -672,7 +642,6 @@ const configTypes: ConfigTypes = {
     default: true,
     sublabel: "Connect to Amazon S3 (or compatible) securely.",
   },
-  /** @type {object} */
   storage_s3_bucket: {
     type: "String",
     label: "Amazon S3 Bucket",
@@ -680,7 +649,6 @@ const configTypes: ConfigTypes = {
     default: "",
     blurb: "Name you selected for your S3 bucket in AWS.",
   },
-  /** @type {object} */
   storage_s3_path_prefix: {
     type: "String",
     label: "Amazon S3 Path Prefix",
@@ -688,7 +656,6 @@ const configTypes: ConfigTypes = {
     default: "",
     blurb: "Prefix you selected for your S3 bucket in AWS.",
   },
-  /** @type {object} */
   storage_s3_endpoint: {
     type: "String",
     label: "Amazon S3 Endpoint",
@@ -697,7 +664,6 @@ const configTypes: ConfigTypes = {
     blurb:
       "Hostname of your S3 Compatible Storage provider. Defaults to 's3.amazonaws.com'.",
   },
-  /** @type {object} */
   storage_s3_region: {
     type: "String",
     label: "Amazon S3 Region",
@@ -706,7 +672,6 @@ const configTypes: ConfigTypes = {
     blurb:
       "AWS region you selected when creating your S3 bucket. Default ti 'us-east-1'.",
   },
-  /** @type {object} */
   storage_s3_access_key: {
     type: "String",
     label: "Amazon S3 Access Key ID",
@@ -715,7 +680,6 @@ const configTypes: ConfigTypes = {
     blurb:
       "Only required if you do not want to authenticate to S3 using an IAM role. Enter the Access Key ID provided by your Amazon EC2 administrator.",
   },
-  /** @type {object} */
   storage_s3_access_secret: {
     type: "String",
     input_type: "password",
@@ -725,7 +689,6 @@ const configTypes: ConfigTypes = {
     blurb:
       "The secret access key associated with your Amazon S3 Access Key ID.",
   },
-  /** @type {object} */
   plugins_store_endpoint: {
     type: "String",
     input_type: "String",
@@ -734,7 +697,6 @@ const configTypes: ConfigTypes = {
     //root_only: true,
     blurb: "The endpoint of plugins store.",
   },
-  /** @type {object} */
   packs_store_endpoint: {
     type: "String",
     input_type: "String",
@@ -921,15 +883,6 @@ const configTypes: ConfigTypes = {
     sublabel: "Record the request IP address in log messages",
     default: false,
   },
-  apple_team_id: {
-    type: "String",
-    default: null,
-    label: "Apple Developer Team ID",
-    blurb:
-      "Issued by Apple for enrolled members of the 'Apple Developer Program'." +
-      "The team id must be set to build mobile iOS apps that can run on a device.",
-  },
-  /** @type {object} */
   file_accept_filter_default: {
     type: "String",
     label: "Default File accept filter",
@@ -939,7 +892,6 @@ const configTypes: ConfigTypes = {
       "Specifies a default filter for what file types the user can pick from the file input dialog box. " +
       "Example is `.doc, text/csv,audio/*,video/*,image/*`",
   },
-  /** @type {object} */
   csv_types_detection_rows: {
     type: "Integer",
     label: "CSV types detection rows",
@@ -948,7 +900,6 @@ const configTypes: ConfigTypes = {
       "Specifies how many rows from start of CSV file will be using to determine types in created tables. " +
       "Default is 500",
   },
-  /** @type {object} */
   csv_bool_values: {
     type: "String",
     label: "CSV bool values",
@@ -956,14 +907,12 @@ const configTypes: ConfigTypes = {
     blurb:
       "Allows to redefine list of values that recognized as bool values in cvs file",
   },
-  /** @type {object} */
   file_upload_debug: {
     type: "Bool",
     label: "File upload debug",
     default: false,
     blurb: "Turn on to debug file upload in express-fileupload.",
   },
-  /** @type {object} */
   file_upload_timeout: {
     type: "Integer",
     label: "File upload timeout",
@@ -972,7 +921,6 @@ const configTypes: ConfigTypes = {
       "Defines how long to wait for data before aborting file upload. " +
       "Set to 0 if you want to turn off timeout checks. ",
   },
-  /** @type {object} */
   file_upload_limit: {
     type: "Integer",
     label: "Upload size limit (Kb)",
@@ -1032,7 +980,6 @@ const configTypes: ConfigTypes = {
     required: true,
     blurb: "Minimum role to edit menu",
   },
-  /** @type {object} */
   min_role_search: {
     type: "Role",
     label: "Role for search",
@@ -1040,7 +987,6 @@ const configTypes: ConfigTypes = {
     required: true,
     blurb: "Minimum role to access search page",
   },
-  /** @type {object} */
   search_page_size: {
     type: "Integer",
     label: "Search page size",
@@ -1100,6 +1046,7 @@ const configTypes: ConfigTypes = {
     type: "hidden",
     label: "Joined log socket ids",
     default: [],
+    excludeFromMobile: true,
   },
   prune_session_interval: {
     type: "Integer",
@@ -1115,12 +1062,14 @@ const configTypes: ConfigTypes = {
     type: "JSON",
     label: "Cached plugin version infos",
     default: {},
+    excludeFromMobile: true,
   },
   // when this is different from the current version, the engines cache is cleared
   engines_cache_sc_version: {
     type: "String",
     label: "Saltcorn version for engines cache",
     default: "",
+    excludeFromMobile: true,
   },
   delete_finished_workflows_days: {
     type: "Integer",
