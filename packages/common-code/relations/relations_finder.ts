@@ -1,6 +1,7 @@
 import { buildTableCaches } from "./relation_helpers";
 import { ViewDisplayType } from "./relation_types";
 import { Relation } from "./relation";
+import { parseRelationPath } from "./relation_helpers";
 
 /**
  * RelationsFinder class
@@ -70,6 +71,25 @@ export class RelationsFinder {
                 ViewDisplayType.NO_ROW_LIMIT
               )
             );
+          }
+          if (paths.length === 0) {
+            const pathsFromUser = this.singleRelationPaths(
+              "users",
+              subView,
+              excluded
+            );
+            for (const pathFromUser of pathsFromUser) {
+              const { path } = parseRelationPath(pathFromUser);
+              if (path.length === 1 && path[0].fkey) {
+                result.push(
+                  new Relation(
+                    `${Relation.fixedUserRelation}.${path[0].fkey}`,
+                    targetTbl.name,
+                    ViewDisplayType.ROW_REQUIRED
+                  )
+                );
+              }
+            }
           }
           break;
         }

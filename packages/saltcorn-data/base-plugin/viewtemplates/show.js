@@ -538,9 +538,16 @@ const renderRows = async (
             targetTbl.name,
             displayType(await view.get_state_fields())
           );
+          let userFk = null;
+          if (relation.isFixedRelationWithPath()) {
+            const userDb = await User.findOne({id: get_user_id()});
+            if (userDb) {
+              userFk = userDb[relation.path[1].fkey];
+            }
+          }
           state1 = pathToState(
             relation,
-            relation.isFixedRelation() ? get_user_id : get_row_val
+            userFk ? () => userFk : relation.isFixedRelation() ? get_user_id : get_row_val
           );
         } else {
           switch (view.view_select.type) {

@@ -67,4 +67,8 @@ export class Relation {
   isFixedRelation() {
     return this.relationString === Relation.fixedUserRelation;
   }
+
+  isFixedRelationWithPath() {
+    return this.relationString.startsWith(Relation.fixedUserRelation);
+  }
 }

@@ -15,6 +15,7 @@ const buildBadgeCfgs = (sourceTblName, type, path, caches, relString) => {
   else if (relString === Relation.fixedUserRelation)
     return [{ table: "logged in user" }];
   else {
+    const isFixedWithPath = relString.startsWith(Relation.fixedUserRelation);
     const result = [];
     let currentCfg = null;
     let currentTbl = sourceTblName;
@@ -24,8 +25,12 @@ const buildBadgeCfgs = (sourceTblName, type, path, caches, relString) => {
         currentTbl = pathElement.table;
         currentCfg = { up: pathElement.inboundKey, table: currentTbl };
       } else if (pathElement.fkey) {
-        if (!currentCfg)
-          result.push({ down: pathElement.fkey, table: currentTbl });
+        if (!currentCfg) {
+          if (pathElement.fkey !== "_logged_in_ref_without_rel_")
+            result.push({ down: pathElement.fkey, table: currentTbl });
+          else 
+            result.push({ down: "logged in user", table: "" });
+        }
         else {
           currentCfg.down = pathElement.fkey;
           result.push(currentCfg);
@@ -34,7 +39,8 @@ const buildBadgeCfgs = (sourceTblName, type, path, caches, relString) => {
         const fkey = tblObj.foreign_keys.find(
           (key) => key.name === pathElement.fkey
         );
-        currentTbl = fkey.reftable_name;
+        if (fkey) currentTbl = fkey.reftable_name;
+        else if (isFixedWithPath) currentTbl = "users";
         currentCfg = { table: currentTbl };
       }
     }

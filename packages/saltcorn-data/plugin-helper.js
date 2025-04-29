@@ -1946,6 +1946,7 @@ const handleRelationPath = (queryObj, qstate, table) => {
     const levels = [];
     let lastTableName = queryObj.sourcetable;
     let where = null;
+    let lastWasFixed = false;
     for (const level of queryObj.path) {
       if (level.inboundKey) {
         const tbl = Table.findOne(level.table);
@@ -1965,12 +1966,24 @@ const handleRelationPath = (queryObj, qstate, table) => {
         const refField = lastTable.fields.find(
           (field) => field.name === level.fkey
         );
-        levels.push({
-          table: refField.reftable_name,
-          fkey: level.fkey,
-          pk_name: refField?.refname,
-        });
-        lastTableName = refField.reftable_name;
+        if (!refField && level.fkey === "_logged_in_ref_without_rel_") {
+          lastTableName = "users";
+          lastWasFixed = true;
+        } else {
+          lastTableName = refField.reftable_name;
+          if (lastWasFixed ) {
+            lastWasFixed = false;
+            levels.push({
+              table: "users",
+              fkey: level.fkey,
+            });
+          }
+          else levels.push({
+            table: refField.reftable_name,
+            fkey: level.fkey,
+            pk_name: refField?.refname,
+          });
+        }
         const finalTable = Table.findOne({ name: lastTableName });
         if (!where)
           where = {
@@ -1979,14 +1992,25 @@ const handleRelationPath = (queryObj, qstate, table) => {
           };
       }
     }
-
-    addOrCreateList(qstate, table?.pk_name || "id", {
-      inSelectWithLevels: {
-        joinLevels: levels,
-        schema: db.getTenantSchema(),
-        where,
-      },
-    });
+    if (levels.length === 1 && levels[0].isFixed) {
+      addOrCreateList(
+        qstate, table?.pk_name || "id", {    
+        inSelect: {
+          table: "users",
+          tenant: db.getTenantSchema() || "public",
+          field: levels[0].fkey,
+          where,
+        }});
+    }
+    else {
+      addOrCreateList(qstate, table?.pk_name || "id", {
+        inSelectWithLevels: {
+          joinLevels: levels,
+          schema: db.getTenantSchema(),
+          where,
+        },
+      });
+    }
   }
 };
 
@@ -2809,6 +2833,9 @@ const pathToState = (relation, getRowVal) => {
       return relation.isFixedRelation()
         ? {
             [pkName]: getRowVal(pkName),
+          } :
+          relation.isFixedRelationWithPath() ? {
+            [relation.relationString]: getRowVal(),
           }
         : {
             [relation.relationString]:

@@ -26,7 +26,7 @@ import {
 import { useNode, Element, useEditor } from "@craftjs/core";
 import FontIconPicker from "@fonticonpicker/react-fonticonpicker";
 import Tippy from "@tippyjs/react";
-import { RelationType } from "@saltcorn/common-code";
+import { Relation, RelationType } from "@saltcorn/common-code";
 import Select from "react-select";
 
 export const DynamicFontAwesomeIcon = ({ icon, className }) => {
@@ -1808,7 +1808,9 @@ export const buildLayers = (relations, tableName, tableNameCache) => {
           const fkey = tblObj.foreign_keys.find(
             (key) => key.name === pathElement.fkey
           );
-          currentTbl = fkey.reftable_name;
+          if (fkey) currentTbl = fkey.reftable_name;
+          else if (pathElement.fkey === "_logged_in_ref_without_rel_")
+            currentTbl = "users";
           const existing = currentLevel.fkeys.find(
             (key) => key.name === pathElement.fkey
           );
@@ -1816,7 +1818,7 @@ export const buildLayers = (relations, tableName, tableNameCache) => {
             currentLevel = existing;
           } else {
             const nextLevel = {
-              name: pathElement.fkey,
+              name: pathElement.fkey === "_logged_in_ref_without_rel_" ? "logged in user" : pathElement.fkey,
               table: currentTbl,
               inboundKeys: [],
               fkeys: [],
