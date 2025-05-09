@@ -450,8 +450,8 @@ router.get(
  * Emit Event using POST
  * This is used from the mobile app to send an event to the server.
  *
- * The user comes the JWT token and actions,
- * listening for the event, have to check on their own if the user is allowed to run it.
+ * The user comes from the JWT token.
+ * Actions, listening for that event, have to check on their own if the user has the rights.
  */
 router.post(
   "/emit-event/:eventname",
@@ -500,65 +500,73 @@ router.all(
       res.status(404).json({ error: req.__("Not found") });
       return;
     }
-    await passport.authenticate(
-      "api-bearer",
-      { session: false },
-      async function (err, user, info) {
-        if (accessAllowed(req, user, trigger)) {
-          try {
-            let resp;
-            const row = req.method === "GET" ? req.query : req.body || {};
-            if (trigger.action === "Workflow") {
-              resp = await trigger.runWithoutRow({
-                req,
-                interactive: true,
-                row,
-                user: user || req.user,
-              });
-              delete resp.__wf_run_id;
-            } else {
-              const action = getState().actions[trigger.action];
-              resp = await action.run({
-                configuration: trigger.configuration,
-                body: req.body || {},
-                row,
-                req,
-                user: user || req.user,
-              });
-            }
-            if (
-              (row._process_result || req.headers?.scprocessresults) &&
-              resp?.goto
-            )
-              res.redirect(resp.goto);
-            else if (req.headers?.scgotourl)
-              res.redirect(req.headers?.scgotourl);
-            else {
-              if (
-                trigger.configuration?._raw_output &&
-                trigger.configuration?._response_mime
-              ) {
-                res.setHeader(
-                  "content-type",
-                  trigger.configuration?._response_mime
-                );
-                res.send(resp);
-              } else if (trigger.configuration?._raw_output) res.json(resp);
-              else if (resp?.error) {
-                const { error, ...rest } = resp;
-                res.json({ success: false, error, data: rest });
-              } else res.json({ success: true, data: resp });
-            }
-          } catch (e) {
-            Crash.create(e, req);
-            res.status(400).json({ success: false, error: e.message });
+
+    const runFn = async (user) => {
+      if (accessAllowed(req, user, trigger)) {
+        try {
+          let resp;
+          const row = req.method === "GET" ? req.query : req.body || {};
+          if (trigger.action === "Workflow") {
+            resp = await trigger.runWithoutRow({
+              req,
+              interactive: true,
+              row,
+              user: user || req.user,
+            });
+            delete resp.__wf_run_id;
+          } else {
+            const action = getState().actions[trigger.action];
+            resp = await action.run({
+              configuration: trigger.configuration,
+              body: req.body || {},
+              row,
+              req,
+              user: user || req.user,
+            });
           }
-        } else {
-          getState().log(3, `API action ${actionname} not authorized`);
-          res.status(401).json({ error: req.__("Not authorized") });
+          if (
+            (row._process_result || req.headers?.scprocessresults) &&
+            resp?.goto
+          )
+            res.redirect(resp.goto);
+          else if (req.headers?.scgotourl) res.redirect(req.headers?.scgotourl);
+          else {
+            if (
+              trigger.configuration?._raw_output &&
+              trigger.configuration?._response_mime
+            ) {
+              res.setHeader(
+                "content-type",
+                trigger.configuration?._response_mime
+              );
+              res.send(resp);
+            } else if (trigger.configuration?._raw_output) res.json(resp);
+            else if (resp?.error) {
+              const { error, ...rest } = resp;
+              res.json({ success: false, error, data: rest });
+            } else res.json({ success: true, data: resp });
+          }
+        } catch (e) {
+          Crash.create(e, req);
+          res.status(400).json({ success: false, error: e.message });
         }
+      } else {
+        getState().log(3, `API action ${actionname} not authorized`);
+        res.status(401).json({ error: req.__("Not authorized") });
       }
-    )(req, res, next);
+    };
+
+    if (req.user && req.user.id) {
+      await runFn(req.user);
+    } else {
+      await passport.authenticate(
+        "api-bearer",
+        { session: false },
+        async function (err, user, info) {
+          await runFn(user);
+        }
+      )(req, res, next);
+    }
   })
 );
 
