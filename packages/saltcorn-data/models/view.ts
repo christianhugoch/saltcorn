@@ -983,7 +983,7 @@ class View implements AbstractView {
    * @returns the full event name
    */
   getRealTimeEventName(eventType: string): string {
-    return `${eventType}_${this.name}`;
+    return `${this.name}_${eventType}`;
   }
 }
 

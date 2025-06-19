@@ -2094,6 +2094,48 @@ function init_collab_room(viewname, eventCfgs) {
   });
 }
 
+async function update_real_time_view(viewElement) {
+  const urlAttr = (elem) =>
+    elem?.getAttribute("data-sc-local-state") ||
+    elem?.getAttribute("data-sc-view-source");
+  let url = urlAttr(viewElement);
+  let safeElement = viewElement;
+  if (!url) {
+    safeElement = viewElement.querySelector("[data-sc-view-source]");
+    if (safeElement) {
+      url = urlAttr(safeElement);
+    } else {
+      console.error("No data-sc-view-source found in the view element.");
+      return null;
+    }
+  }
+  const response = await fetch(url, {
+    headers: {
+      "X-Requested-With": "XMLHttpRequest",
+      localizedstate: "true", //no admin bar
+    },
+  });
+  if (response.status === 200) {
+    const template = document.createElement("template");
+    template.innerHTML = await response.text();
+    // todo be more safe which child to use
+    let newViewElement = template.content.children[1];
+    if (!newViewElement.getAttribute("data-sc-embed-viewname"))
+      newViewElement = newViewElement.querySelector("[data-sc-embed-viewname]");
+    if (!newViewElement) {
+      console.error("No data-sc-embed-viewname found in the new view element.");
+      return null;
+    }
+    safeElement.replaceWith(newViewElement);
+    return newViewElement;
+  } else {
+    console.error(
+      `Failed to fetch view from ${url}: ${response.status} ${response.statusText}`
+    );
+    return null;
+  }
+}
+
 function cancel_form(form) {
   if (!form) return;
   $(form).trigger("reset");

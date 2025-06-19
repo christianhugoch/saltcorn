@@ -259,6 +259,25 @@ const configuration_workflow = (req) =>
           };
         },
       },
+      {
+        name: req.__("Real-time updates"),
+        onlyWhen: () => {
+          const devMode = getState().getConfig("development_mode", false);
+          return devMode === true;
+        },
+        form: async () => {
+          return new Form({
+            fields: [
+              {
+                name: "enable_realtime",
+                label: req.__("Enable real-time updates"),
+                type: "Bool",
+                default: false,
+              },
+            ],
+          });
+        },
+      },
     ],
   });
 
@@ -292,7 +311,7 @@ const initial_config = initial_config_all_fields(false);
 const run = async (
   table_id,
   viewname,
-  { columns, layout, page_title, page_title_formula },
+  { columns, layout, page_title, page_title_formula, enable_realtime },
   state,
   extra,
   { showQuery }
@@ -387,8 +406,27 @@ const run = async (
     page_title_preamble = `<!--SCPT:${text_attr(the_title)}-->`;
   }
 
-  if (!extra.req.generate_email) return page_title_preamble + rendered;
-  else {
+  if (!extra.req.generate_email) {
+    let realTimeUpdater = "";
+    if (
+      enable_realtime &&
+      !extra.req.xhr &&
+      getState().getConfig("development_mode", false) === true
+    ) {
+      const rndid = Math.random().toString(36).substring(2, 10);
+      realTimeUpdater =
+        script({
+          src: `/static_assets/${db.connectObj.version_tag}/socket.io.min.js`,
+        }) +
+        script(
+          { id: rndid },
+          !extra.req.xhr
+            ? domReady(realTimeScript(viewname, table_id, rows[0], rndid))
+            : ""
+        );
+    }
+    return page_title_preamble + rendered + realTimeUpdater;
+  } else {
     return rendered;
   }
 };
@@ -1184,6 +1222,52 @@ const createBasicView = async ({
 
   return cfg;
 };
+
+const realTimeScript = (viewname, table_id, row, scriptId) => {
+  const view = View.findOne({ name: viewname });
+  const table = Table.findOne({ id: table_id });
+  const rowId = row[table.pk_name];
+  return `
+  const currentScript = document.getElementById('${scriptId}');
+  let realTimeView = currentScript?.closest(
+    '[data-sc-embed-viewname="${viewname}"]'
+  );
+  const collabCfg = 
+  {
+    events: {
+      '${view.getRealTimeEventName(
+        `UPDATE_EVENT?id=${rowId}`
+      )}': async (data) => {
+        const result = await update_real_time_view(realTimeView);
+        if (result) realTimeView = result;
+      }
+    }
+  };
+  init_collab_room('${viewname}', collabCfg);
+  `;
+};
+
+const virtual_triggers = (table_id, viewname, { enable_realtime }) => {
+  if (!enable_realtime) return [];
+  else {
+    const table = Table.findOne({ id: table_id });
+    const view = View.findOne({ name: viewname });
+    return [
+      {
+        when_trigger: "Update",
+        table_id: table_id,
+        run: async (row) => {
+          const devMode = getState().getConfig("development_mode", false);
+          if (devMode === true) {
+            const rowId = row[table.pk_name];
+            view.emitRealTimeEvent(`UPDATE_EVENT?id=${rowId}`);
+          }
+        },
+      },
+    ];
+  }
+};
+
 module.exports = {
   /** @type {string} */
   name: "Show",
@@ -1197,6 +1281,7 @@ module.exports = {
   initial_config,
   createBasicView,
   routes: { run_action },
+  virtual_triggers,
   /**
    * @param {object} opts
    * @param {object} opts.layout
