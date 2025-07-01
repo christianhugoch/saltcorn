@@ -70,10 +70,12 @@ const ensurePluginSupport = async (plugin, forceFetch) => {
     versions,
     packagejson.version
   );
-  if (!supported)
+  if (!supported) {
+    getState().log(6, `No supported version for '${JSON.stringify(plugin)}'`);
     throw new Error(
       `Unable to find a supported version for '${plugin.location}'`
     );
+  }
   else if (
     supported !== plugin.version ||
     (plugin.version === "latest" && supported !== resolveLatest(versions))
