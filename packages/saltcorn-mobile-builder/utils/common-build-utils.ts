@@ -303,6 +303,28 @@ export async function modifyAndroidManifest(
       ];
     }
 
+    parsed.manifest.application[0].activity[0]["intent-filter"] = [
+      ...(parsed.manifest.application[0].activity[0]["intent-filter"] || []),
+      {
+        $: { "android:autoVerify": "true" },
+        action: [{ $: { "android:name": "android.intent.action.VIEW" } }],
+        category: [
+          { $: { "android:name": "android.intent.category.DEFAULT" } },
+          { $: { "android:name": "android.intent.category.BROWSABLE" } },
+        ],
+        data: [
+          {
+            $: {
+              "android:scheme": "myapp",
+              "android:host": "auth",
+              "android:path": "/callback",
+            },
+          },
+        ],
+      },
+    ];
+
+
     const xmlBuilder = new Builder();
     const newCfg = xmlBuilder.buildObject(parsed);
     writeFileSync(androidManifest, newCfg);

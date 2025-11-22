@@ -1448,6 +1448,19 @@ router.post(
   })
 );
 
+const generateTokenForUser = (user) => {
+  const jwt = require("jsonwebtoken");
+  const token = jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      role_id: user.role_id,
+    },
+    "06b3978dfee90b8bc5650d4b068a65444dcda8e2d6866d57d19d24221d57a9bcd18e70006b6fefd764c12d4283cd41525126a6208657171904a3f800eeae7523"
+  );
+  return token;
+};
+
 /**
  * @param {object} req
  * @param {object} res
@@ -1489,10 +1502,12 @@ const loginCallback = (req, res) => async () => {
       res.redirect(req.cookies["login_dest"]);
       return;
     }
-
-    res.redirect(`myapp://auth/callback`);
-
-    // res.redirect("/");
+    const source = req.query.state;
+    if (source === "mobile_app")
+      res.redirect(
+        `myapp://auth/callback?token=${generateTokenForUser(req.user)}`
+      );
+    else res.redirect("/");
   }
 };
 
