@@ -11,6 +11,7 @@ import {
   initPushNotifications,
   unregisterPushNotifications,
 } from "../helpers/notifications";
+import { Browser } from '@capacitor/browser';
 
 async function loginRequest({ email, password, isSignup, isPublic }) {
   const opts = isPublic
@@ -173,6 +174,22 @@ export async function logout() {
     });
     await replaceIframe(page.content);
   } catch (error) {
+    showAlerts([
+      {
+        type: "error",
+        msg: error.message ? error.message : "An error occured.",
+      },
+    ]);
+  }
+}
+
+export async function redirectLogin(redirectUrl) {
+  try {
+    console.log("Redirecting to ", redirectUrl);
+    
+    await Browser.open({ url: redirectUrl });
+  }
+  catch (error) {
     showAlerts([
       {
         type: "error",

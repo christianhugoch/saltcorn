@@ -1490,7 +1490,9 @@ const loginCallback = (req, res) => async () => {
       return;
     }
 
-    res.redirect("/");
+    res.redirect(`myapp://auth/callback`);
+
+    // res.redirect("/");
   }
 };
 

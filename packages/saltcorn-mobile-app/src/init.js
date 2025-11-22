@@ -381,6 +381,19 @@ export async function init(mobileConfig) {
       await saltcorn.mobileApp.navigation.goBack(1, true);
     });
 
+    App.addListener('appUrlOpen', (event) => {
+      console.log("app was opened by url link");
+      
+      const url = event.url;
+      console.log(url);
+      
+      if (url.startsWith("myapp://auth/callback")) {
+        // const token = new URL(url).searchParams.get("token");
+        // storeToken(token);
+      }
+    });
+    
+
     const lastLocation = takeLastLocation();
     document.addEventListener("resume", onResume, false);
     await addScripts(mobileConfig.version_tag);

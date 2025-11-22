@@ -287,6 +287,26 @@ async function loginFormSubmit(e, entryView) {
   }
 }
 
+async function loginWith(strategyName) {
+  try {
+    console.log("Logging in with ", strategyName);
+
+    const state = parent.saltcorn.data.state.getState();
+    // const method = state.auth_methods[strategyName];
+    // let cbUrl = method.strategy._callbackURL;
+    // if (cbUrl.startsWith("http://localhost")) {
+    //   let url = new URL(cbUrl);
+    //   cbUrl = `http://10.0.2.2:${url.port}${url.pathname}`;
+    // }
+
+    parent.saltcorn.mobileApp.auth.redirectLogin(
+      `${state.mobileConfig.server_path}/auth/login-with/${strategyName}`
+    );
+  } catch (error) {
+    parent.saltcorn.mobileApp.common.errorAlert(error);
+  }
+}
+
 async function local_post_btn(e) {
   try {
     showLoadSpinner();
