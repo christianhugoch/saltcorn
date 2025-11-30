@@ -6,12 +6,7 @@ import type User from "@saltcorn/data/models/user";
 import utils = require("@saltcorn/data/utils");
 const { safeEnding } = utils;
 import File from "@saltcorn/data/models/file";
-import {
-  copyPrepopulatedDb,
-  extractDomain,
-  androidPermissions,
-  androidFeatures,
-} from "./common-build-utils";
+import { copyPrepopulatedDb, extractDomain } from "./common-build-utils";
 import { writeFileSync } from "fs";
 const { getState } = require("@saltcorn/data/db/state");
 
@@ -269,8 +264,6 @@ export class CapacitorHelper {
       keystoreFile: this.keyStoreFile,
       keystoreAlias: this.keyStoreAlias,
       keystorePassword: this.keyStorePassword,
-      permissions: androidPermissions(),
-      features: androidFeatures(),
     };
     const cfgFile = join(this.buildDir, "saltcorn-mobile-cfg.json");
     writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
@@ -295,6 +288,7 @@ export class CapacitorHelper {
     console.log("building with docker");
     const state = getState();
     const dockerMode = this.getDockerMode();
+    console.log(`docker mode: ${dockerMode}`);
     const userParams = [];
     if (dockerMode === "Rootful") {
       if (process.getuid && process.getgid)
@@ -309,7 +303,7 @@ export class CapacitorHelper {
       "host",
       "-v",
       `${this.buildDir}:/saltcorn-mobile-app`,
-      `saltcorn/capacitor-builder:${state.scVersion}`,
+      `saltcorn/capacitor-builder:${"1.5.0-beta.7"}`,
     ];
     const result = spawnSync("docker", spawnParams, {
       cwd: ".",
