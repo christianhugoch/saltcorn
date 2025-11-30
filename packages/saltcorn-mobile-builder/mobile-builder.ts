@@ -72,6 +72,7 @@ type MobileBuilderConfig = {
   autoPublicLogin: string;
   showContinueAsPublicUser?: boolean;
   allowOfflineMode: string;
+  syncInterval?: number;
   plugins: Plugin[];
   copyTargetDir?: string;
   user?: User;
@@ -108,6 +109,7 @@ export class MobileBuilder {
   autoPublicLogin: string;
   showContinueAsPublicUser: boolean;
   allowOfflineMode: string;
+  syncInterval?: number;
   pluginManager: any;
   plugins: Plugin[];
   packageRoot = join(__dirname, "../");
@@ -153,6 +155,7 @@ export class MobileBuilder {
     this.autoPublicLogin = cfg.autoPublicLogin;
     this.showContinueAsPublicUser = !!cfg.showContinueAsPublicUser;
     this.allowOfflineMode = cfg.allowOfflineMode;
+    this.syncInterval = cfg.syncInterval;
     this.pluginManager = new PluginManager({
       pluginsPath: join(this.buildDir, "plugin_packages", "node_modules"),
     });
@@ -241,6 +244,7 @@ export class MobileBuilder {
         autoPublicLogin: this.autoPublicLogin,
         showContinueAsPublicUser: this.showContinueAsPublicUser,
         allowOfflineMode: this.allowOfflineMode,
+        syncInterval: this.syncInterval ? this.syncInterval : 0,
         allowShareTo: this.allowShareTo,
       });
       let resultCode = await bundlePackagesAndPlugins(

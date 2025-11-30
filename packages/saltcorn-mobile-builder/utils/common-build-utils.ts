@@ -64,6 +64,7 @@ export function prepareBuildDir(
     "@capacitor-community/sqlite@7.0.2",
     "@capacitor/screen-orientation@7.0.2",
     "@capacitor/app@7.1.0",
+    "@transistorsoft/capacitor-background-fetch@7.1.0",
     "send-intent@7.0.0",
     ...additionalPlugins,
     ...(fcmEnabled

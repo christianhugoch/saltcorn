@@ -89,6 +89,21 @@ export class PushMessageHelper {
     }
   }
 
+  public async sendSyncPush() {
+    const app = await this.getFcmApp();
+    const data = {
+      type: "sync",
+    };
+    for (const sub of this.subscriptions) {
+      const messageId = await admin.messaging(app).send({
+        token: sub.token,
+        data: data,
+      });
+      getState()?.log(5, `FCM sync push sent successfully: ${messageId}`);
+    }
+
+  }
+
   private async sendWebPush(
     notification: Notification,
     sub: WebPushSubscription

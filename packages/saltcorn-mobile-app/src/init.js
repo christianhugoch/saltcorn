@@ -5,6 +5,7 @@ import {
   networkChangeCallback,
   sync,
   getLastOfflineSession,
+  setupSync
 } from "./helpers/offline_mode.js";
 import {
   updateScPlugins,
@@ -442,6 +443,9 @@ export async function init(mobileConfig) {
     const networkDisabled = state.mobileConfig.networkState === "none";
     const jwt = state.mobileConfig.jwt;
     const alerts = [];
+
+    await setupSync();
+
     if ((networkDisabled && jwt) || (await checkJWT(jwt))) {
       const mobileConfig = state.mobileConfig;
       const decodedJwt = jwtDecode(mobileConfig.jwt);

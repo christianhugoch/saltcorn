@@ -8,6 +8,7 @@ import {
   showLoadSpinner,
   removeLoadSpinner,
 } from "./common";
+import { BackgroundFetch } from "@transistorsoft/capacitor-background-fetch";
 
 const setUploadStarted = async (started, time) => {
   const state = saltcorn.data.state.getState();
@@ -445,8 +446,8 @@ const setSpinnerText = () => {
   }
 };
 
-export async function sync() {
-  setSpinnerText();
+export async function sync(background = false) {
+  if (!background) setSpinnerText();
   const state = saltcorn.data.state.getState();
   const { user } = state.mobileConfig;
   const { offlineUser, hasOfflineData, uploadStarted, uploadStartTime } =
@@ -465,12 +466,14 @@ export async function sync() {
     const syncTimestamp = await getSyncTimestamp();
     await setUploadStarted(true, syncTimestamp);
     let lock = null;
-    try {
-      if (window.navigator?.wakeLock?.request)
-        lock = await window.navigator.wakeLock.request();
-    } catch (error) {
-      console.log("wakeLock not available");
-      console.log(error);
+    if (!background) {
+      try {
+        if (window.navigator?.wakeLock?.request)
+          lock = await window.navigator.wakeLock.request();
+      } catch (error) {
+        console.log("wakeLock not available");
+        console.log(error);
+      }
     }
     let transactionOpen = false;
     try {
@@ -641,5 +644,36 @@ export async function deleteOfflineData(noFeedback) {
   } finally {
     mobileConfig.inLoadState = false;
     if (!noFeedback) removeLoadSpinner();
+  }
+}
+
+export async function setupSync(fetchInterval = 15) {
+  const status = await BackgroundFetch.configure(
+    {
+      minimumFetchInterval: fetchInterval,
+    },
+    async (taskId) => {
+      console.log("Starting background sync:", taskId);
+      await sync(true);
+      console.log("Background sync finished:", taskId);
+
+      BackgroundFetch.finish(taskId);
+    },
+    async (taskId) => {
+      console.log("[BackgroundFetch] TIMEOUT:", taskId);
+      BackgroundFetch.finish(taskId);
+    }
+  );
+
+  if (status !== BackgroundFetch.STATUS_AVAILABLE) {
+    if (status === BackgroundFetch.STATUS_DENIED) {
+      console.log(
+        "The user explicitly disabled background behavior for this app or for the whole system."
+      );
+    } else if (status === BackgroundFetch.STATUS_RESTRICTED) {
+      console.log(
+        "Background updates are unavailable and the user cannot enable them again."
+      );
+    }
   }
 }

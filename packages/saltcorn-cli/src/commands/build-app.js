@@ -137,6 +137,7 @@ class BuildAppCommand extends Command {
         autoPublicLogin: flags.autoPublicLogin,
         showContinueAsPublicUser: flags.showContinueAsPublicUser,
         allowOfflineMode: flags.allowOfflineMode,
+        syncInterval: flags.syncInterval,
         allowShareTo: flags.allowShareTo,
         plugins: await this.uniquePlugins(flags.includedPlugins),
         copyTargetDir: flags.copyAppDirectory,
@@ -313,6 +314,11 @@ BuildAppCommand.flags = {
     string: "allowOfflineMode",
     description:
       "Switch to offline mode when there is no internet, sync the data when a connection is available again.",
+  }),
+  syncInterval: Flags.boolean({
+    name: "Periodic Sync Interval",
+    string: "syncInterval",
+    description: "TODO"
   }),
   provisioningProfile: Flags.string({
     name: "provisioning profile",
