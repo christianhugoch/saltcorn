@@ -10,8 +10,6 @@ import { Device } from "@capacitor/device";
  * internal helper to subscribe or unsubscribe to push notifications (server side)
  */
 async function notifyTokenApi(config, isSubscribe) {
-  console.log("notifyTokenApi subscribe:", isSubscribe);
-
   const { token, deviceId } = config.pushConfiguration;
   try {
     const response = await apiCall({

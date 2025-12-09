@@ -116,11 +116,11 @@ const {
   getSafeSaltcornCmd,
   getFetchProxyOptions,
   sleep,
+  imageAvailable,
 } = require("@saltcorn/data/utils");
 const stream = require("stream");
 const Crash = require("@saltcorn/data/models/crash");
 const { get_help_markup } = require("../help/index.js");
-const Docker = require("dockerode");
 const npmFetch = require("npm-registry-fetch");
 const Tag = require("@saltcorn/data/models/tag");
 const PluginInstaller = require("@saltcorn/plugins-loader/plugin_installer.js");
@@ -2335,32 +2335,6 @@ const buildDialogScript = (capacitorBuilderAvailable, isSbadmin2) =>
 `)}
   </script>`;
 
-const imageAvailable = async (preferedVersion) => {
-  const docker = new Docker();
-  try {
-    const image = docker.getImage(
-      `saltcorn/capacitor-builder:${preferedVersion}`
-    );
-    await image.inspect();
-    return { installed: true, version: preferedVersion };
-  } catch (e) {
-    try {
-      const images = await docker.listImages({
-        filters: { reference: ["saltcorn/capacitor-builder:*"] },
-      });
-      const tags = images.flatMap((img) => img.RepoTags || []);
-      if (tags.length > 0)
-        return { installed: true, version: tags[0].split(":")[1] };
-    } catch (err) {
-      getState().log(
-        5,
-        `Error checking for capacitor-builder image: ${err.message || err}`
-      );
-    }
-    return { installed: false };
-  }
-};
-
 const checkXcodebuild = () => {
   return new Promise((resolve) => {
     exec("xcodebuild -version", (error, stdout, stderr) => {
@@ -2414,7 +2388,10 @@ router.get(
     const builderSettings =
       getState().getConfig("mobile_builder_settings") || {};
     const scVersion = getState().scVersion;
-    const dockerAvailable = await imageAvailable(scVersion);
+    const dockerAvailable = await imageAvailable(
+      "saltcorn/capacitor-builder",
+      scVersion
+    );
     const xcodeCheckRes = await checkXcodebuild();
     const xcodebuildAvailable = xcodeCheckRes.installed;
     const xcodebuildVersion = xcodeCheckRes.version;
@@ -4124,7 +4101,7 @@ router.post(
     if (serverURL) spawnParams.push("-s", serverURL);
     if (splashPage) spawnParams.push("--splashPage", splashPage);
     if (allowOfflineMode) spawnParams.push("--allowOfflineMode");
-    if (syncInterval) spawnParams.push("--syncInterval");
+    if (syncInterval) spawnParams.push("--syncInterval", syncInterval);
     if (pushSync) spawnParams.push("--pushSync");
     if (allowShareTo) spawnParams.push("--allowShareTo");
     if (autoPublicLogin) spawnParams.push("--autoPublicLogin");
@@ -4276,7 +4253,10 @@ router.get(
   isAdmin,
   error_catcher(async (req, res) => {
     const state = getState();
-    const { installed, version } = await imageAvailable(state.scVersion);
+    const { installed, version } = await imageAvailable(
+      "saltcorn/capacitor-builder",
+      state.scVersion
+    );
     res.json({ installed, version, sc_version: state.scVersion });
   })
 );

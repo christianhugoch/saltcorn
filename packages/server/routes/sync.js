@@ -397,7 +397,7 @@ router.post(
     const allSubs = state.getConfig("push_sync_subscriptions", {});
     let userSubs = allSubs[user.id] || [];
     const newUserSubs = userSubs.filter(
-      (s) => !(s.token === token && s.deviceId === deviceId)
+      (s) => s.deviceId !== deviceId
     );
     if (newUserSubs.length === userSubs.length) {
       res.json({

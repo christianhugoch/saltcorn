@@ -51,6 +51,10 @@ module.exports = {
   externals: {
     "@saltcorn/sqlite": "@saltcorn/sqlite",
     "@saltcorn/postgres": "@saltcorn/postgres",
+    "cpu-features": "commonjs cpu-features",
+    // ssh2: "commonjs ssh2",
+    dockerode: "commonjs dockerode",
+    "docker-modem": "commonjs docker-modem",
   },
   optimization: {
     minimize: false, // debug
@@ -77,6 +81,7 @@ module.exports = {
       tls: false,
       dns: false,
       net: false,
+      http2: false,
       punycode: require.resolve("punycode/"),
       console: require.resolve("console-browserify"),
       assert: require.resolve("assert/"),

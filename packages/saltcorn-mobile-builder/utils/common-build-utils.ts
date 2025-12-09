@@ -832,6 +832,7 @@ export function writeCfgFile({
   showContinueAsPublicUser,
   allowOfflineMode,
   pushSync,
+  syncInterval,
   allowShareTo,
 }: any) {
   const wwwDir = join(buildDir, "www");
@@ -847,6 +848,7 @@ export function writeCfgFile({
     showContinueAsPublicUser,
     allowOfflineMode,
     pushSync,
+    syncInterval,
     allowShareTo,
   };
   if (entryPointType !== "byrole") {

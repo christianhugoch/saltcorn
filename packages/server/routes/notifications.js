@@ -379,8 +379,7 @@ router.post(
         (s) => s.type !== "fcm-push" || s.deviceId !== deviceId
       );
       userSubs.push({
-        type: synchedTables ? "mobile-push-sync" : "mobile-push-notify",
-        data: synchedTables ? { synchedTables } : {},
+        type: "fcm-push",
         token: token,
         deviceId: deviceId,
       });
@@ -433,15 +432,33 @@ router.post(
   })
 );
 
-// TODO
 router.post(
   "/mobile-remove-subscription",
   loggedIn,
   error_catcher(async (req, res) => {
-    res.json({
-      success: "ok",
-      message: req.__("Unsubscribed from notifications"),
-    });
+    const { token, deviceId } = req.body || {};
+    if (!token) {
+      res.status(400).json({
+        error: req.__("FCM token is required"),
+      });
+      return;
+    }
+    const user = req.user;
+    const oldSubs = getState().getConfig("push_notification_subscriptions", {});
+    let userSubs = oldSubs[user.id];
+    if (userSubs) {
+      userSubs = userSubs.filter(
+        (s) => s.type !== "fcm-push" || s.deviceId !== deviceId
+      );
+      await getState().setConfig("push_notification_subscriptions", {
+        ...oldSubs,
+        [user.id]: userSubs,
+      });
+      res.json({
+        success: "ok",
+        message: req.__("Unsubscribed from notifications"),
+      });
+    }
   })
 );
 

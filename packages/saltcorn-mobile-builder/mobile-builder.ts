@@ -159,7 +159,7 @@ export class MobileBuilder {
     this.showContinueAsPublicUser = !!cfg.showContinueAsPublicUser;
     this.allowOfflineMode = cfg.allowOfflineMode;
     this.pushSync = cfg.pushSync;
-    this.syncInterval = cfg.syncInterval;
+    this.syncInterval = cfg.syncInterval ? +cfg.syncInterval : undefined;
     this.pluginManager = new PluginManager({
       pluginsPath: join(this.buildDir, "plugin_packages", "node_modules"),
     });

@@ -322,7 +322,7 @@ BuildAppCommand.flags = {
     description:
       "When offline mode is enabled, synchronize the synchedTables tables when a push notification is received.",
   }),
-  syncInterval: Flags.boolean({
+  syncInterval: Flags.string({
     name: "Periodic Sync Interval",
     string: "syncInterval",
     description:
