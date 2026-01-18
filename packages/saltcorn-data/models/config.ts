@@ -1559,6 +1559,16 @@ const configTypes: ConfigTypes = {
     helpTopic: "APN Configurations",
     excludeFromMobile: true,
   },
+  apn_team_id: {
+    type: "String",
+    label: "APN team ID",
+    default: "",
+    blurb:
+      "The Team ID of your Apple Developer account for the APN signing key. " +
+      "You can configure it here or in the 'Mobile app' Menu.",
+    helpTopic: "APN Configurations",
+    excludeFromMobile: true,
+  },
   push_notification_icon: {
     type: "File",
     name: "push_notification_icon",

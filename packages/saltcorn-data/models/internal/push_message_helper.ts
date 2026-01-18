@@ -1,8 +1,10 @@
 import db from "../../db";
 import webpush from "web-push";
 import admin from "firebase-admin";
+import { ApnsClient, SilentNotification } from "apns2";
 import utils from "../../utils";
 import type Notification from "../notification";
+import { readFile } from "fs/promises";
 
 const { getSafeBaseUrl } = utils;
 
@@ -16,14 +18,14 @@ export type WebPushSubscription = {
   };
 };
 
-// FCM
-export type FcmSubscription = {
-  type: "fcm-push";
+// Mobile
+export type MobileSubscription = {
+  type: "fcm-push" | "apns-push";
   token: string;
   deviceId: string;
 };
 
-export type Subscription = WebPushSubscription | FcmSubscription;
+// export type Subscription = WebPushSubscription & MobileSubscription;
 
 type PushMessageHelperConfig = {
   vapidPublicKey?: string;
@@ -37,8 +39,15 @@ type PushMessageHelperConfig = {
     jsonContent?: any;
   };
 
-  notificationSubs?: Record<string, Array<Subscription>>;
-  syncSubs?: Record<string, Array<FcmSubscription>>;
+  apns?: {
+    teamId: string;
+    signingKey: string;
+    signingKeyId: string;
+    appId: string;
+  };
+
+  notificationSubs?: Record<string, Array<any>>;
+  syncSubs?: Record<string, Array<MobileSubscription>>;
 };
 
 /**
@@ -58,8 +67,19 @@ export class PushMessageHelper {
   firebaseJsonContent?: any;
   firebaseApp?: admin.app.App | null;
 
-  notificationSubs: Record<string, Array<Subscription>>;
-  syncSubs: Record<string, Array<FcmSubscription>>;
+  apnsSigningKey?: string;
+  apnsSigningKeyId?: string;
+
+  apns?: {
+    teamId: string;
+    signingKey: string;
+    signingKeyId: string;
+    appId: string;
+  };
+  apnsClient?: ApnsClient;
+
+  notificationSubs: Record<string, Array<any>>;
+  syncSubs: Record<string, Array<MobileSubscription>>;
 
   state: any;
 
@@ -77,8 +97,13 @@ export class PushMessageHelper {
     this.syncSubs = config.syncSubs || {};
     this.firebaseJsonPath = config.firebase.jsonPath;
     this.firebaseJsonContent = config.firebase.jsonContent;
+
+    this.apns = config.apns;
+    // this.fcms = config.fcms;
+
     this.state = require("../../db/state").getState();
     if (this.firebaseJsonContent) this.initFCMApp();
+    if (this.apns) this.initApnsClient();
   }
 
   /**
@@ -148,12 +173,34 @@ export class PushMessageHelper {
             continue;
           }
           try {
-            const messageId = await admin.messaging(this.firebaseApp).send({
-              token: userSub.token,
-              data: { type: "push_sync", table: tableName },
-            });
-            pushedDeviceIds.add(userSub.deviceId);
-            this.state.log(5, `Sync push sent successfully: ${messageId}`);
+            const { token, type, deviceId } = userSub;
+            switch (type) {
+              case "apns-push":
+                const sn = new SilentNotification(token);
+                try {
+                  if (!this.apnsClient)
+                    throw new Error("APNS client not initialized");
+                  await this.apnsClient.send(sn);
+                } catch (err: any) {
+                  console.error(err);
+                }
+                break;
+              case "fcm-push":
+                const messageId = await admin.messaging(this.firebaseApp).send({
+                  token: token,
+                  data: { type: "push_sync", table: tableName },
+                });
+                this.state.log(
+                  5,
+                  `Sync push sent successfully. FCM messageId: ${messageId}`
+                );
+                break;
+              default:
+                throw new Error(
+                  `Unknown push subscription type: ${type}`
+                );
+            }
+            pushedDeviceIds.add(deviceId);
           } catch (error) {
             this.state.log(5, `Error sending sync push: ${error}`);
           }
@@ -181,7 +228,7 @@ export class PushMessageHelper {
     });
   }
 
-  private async fcmPush(notification: Notification, sub: FcmSubscription) {
+  private async fcmPush(notification: Notification, sub: MobileSubscription) {
     this.state.log(5, "Sending FCM notification");
     if (!this.firebaseJsonPath) throw new Error("Firebase config file not set");
     else if (!this.firebaseApp) {
@@ -225,5 +272,18 @@ export class PushMessageHelper {
     );
     this.firebaseApp = app;
     this.state.log(5, `Initialized Firebase app: ${appName}`);
+  }
+
+  private async initApnsClient() {
+    if (!this.apns) throw new Error("APNS config not set");
+    const keyContent = await readFile(this.apns.signingKey, "utf8");
+    this.apnsClient = new ApnsClient({
+      team: this.apns.teamId,
+      keyId: this.apns.signingKeyId,
+      signingKey: keyContent,
+      defaultTopic: this.apns.appId,
+      requestTimeout: 0, // optional, Default: 0 (without timeout)
+      keepAlive: true, // optional, Default: 5000
+    });
   }
 }

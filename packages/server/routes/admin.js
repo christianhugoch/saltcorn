@@ -119,6 +119,7 @@ const {
   sleep,
   dataModulePath,
   imageAvailable,
+  decodeProvisioningProfile,
 } = require("@saltcorn/data/utils");
 const stream = require("stream");
 const Crash = require("@saltcorn/data/models/crash");
@@ -4686,6 +4687,8 @@ router.post(
       );
       await getState().setConfig("apn_signing_key", newCfg.apnSigningKey);
       await getState().setConfig("apn_signing_key_id", newCfg.apnSigningKeyId);
+      const { teamId } = await decodeProvisioningProfile(newCfg.provisioningProfile);
+      await getState().setConfig("apn_team_id", teamId);
       res.json({ success: true });
     } catch (e) {
       getState().log(1, `Unable to save mobile builder config: ${e.message}`);
