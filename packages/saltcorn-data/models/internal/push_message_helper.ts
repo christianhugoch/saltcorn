@@ -254,6 +254,10 @@ export class PushMessageHelper {
     }
   }
 
+  /**
+   * Send a push sync notification. Silent push on iOS, data-only on Android.
+   * @param tableName
+   */
   public async pushSync(tableName: string) {
     for (const userSubs of Object.values(this.syncSubs)) {
       const pushedDeviceIds = new Set<string>();
