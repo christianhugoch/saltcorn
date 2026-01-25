@@ -364,20 +364,40 @@ const getEntryPoint = (roleId, state, mobileConfig) => {
   return entryPoint;
 };
 
+const swipeHelper = () => {
+  // const iframe = document.getElementById("content-iframe");
+  // if (iframe) {
+  //   let touchStartX = 0;
+  //   const doc = iframe.contentDocument || iframe.contentWindow.document;
+  //   doc.addEventListener("pointerdown", (e) => {
+  //     touchStartX = e.changedTouches[0].screenX;
+  //   });
+  //   doc.addEventListener("pointerup", (e) => {
+  //     const deltaX = e.changedTouches[0].screenX - touchStartX;
+  //     if (touchStartX < 20 && deltaX > 100) {
+  //       saltcorn.mobileApp.navigation.goBack(1, true);
+  //     }
+  //   });
+  // }
+};
+
 // device is ready
 export async function init(mobileConfig) {
   try {
-    if (Capacitor.getPlatform() === "web") {
+    const platform = Capacitor.getPlatform();
+    if (platform === "web") {
       defineCustomElements(window);
       await customElements.whenDefined("jeep-sqlite");
       const jeepSqlite = document.createElement("jeep-sqlite");
       document.body.appendChild(jeepSqlite);
       await jeepSqlite.componentOnReady();
+    } else if (platform === "android") {
+      App.addListener("backButton", async ({ canGoBack }) => {
+        await saltcorn.mobileApp.navigation.goBack(1, true);
+      });
+    } else if (platform === "ios") {
+      swipeHelper();
     }
-
-    App.addListener("backButton", async ({ canGoBack }) => {
-      await saltcorn.mobileApp.navigation.goBack(1, true);
-    });
 
     App.addListener("appUrlOpen", async (event) => {
       try {

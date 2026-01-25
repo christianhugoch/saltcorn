@@ -262,9 +262,26 @@ export async function gotoEntryView() {
   }
 }
 
+const iosSwipeBackHandler = () => {
+  const iframe = document.getElementById("content-iframe");
+  let touchStartX = 0;
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.addEventListener("pointerdown", (e) => {
+    touchStartX = e.clientX;
+  });
+
+  doc.addEventListener("pointerup", (e) => {
+    const deltaX = e.clientX - touchStartX;
+    if (touchStartX < 20 && deltaX > 100) {
+      saltcorn.mobileApp.navigation.goBack(1, true);
+    }
+  });
+};
+
 export async function replaceIframe(content, isFile = false) {
   const iframe = document.getElementById("content-iframe");
   iframe.srcdoc = content;
+  iframe.addEventListener("load", iosSwipeBackHandler);
   if (isFile) {
     iframe.setAttribute("is-html-file", true);
     await new Promise((resolve, reject) => {
