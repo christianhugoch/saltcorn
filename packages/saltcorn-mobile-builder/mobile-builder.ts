@@ -15,6 +15,7 @@ import {
   prepareBuildDir,
   prepareExportOptionsPlist,
   copyShareExtFiles,
+  modifyShareViewController,
   writeCapacitorConfig,
   prepAppIcon,
   modifyInfoPlist,
@@ -206,7 +207,8 @@ export class MobileBuilder {
       appVersion: this.appVersion,
     });
     this.apnsKeyId = getState().getConfig("apn_signing_key_id");
-    this.pushNotificationsEnabled = !!this.googleServicesFile || !!this.apnsKeyId;
+    this.pushNotificationsEnabled =
+      !!this.googleServicesFile || !!this.apnsKeyId;
   }
 
   /**
@@ -354,8 +356,16 @@ export class MobileBuilder {
       writeEntitlementsPlist(this.buildDir);
       runAddEntitlementsScript(this.buildDir);
     }
-    if (this.allowShareTo) copyShareExtFiles(this.buildDir);
-    modifyAppDelegate(this.buildDir, this.backgroundSyncEnabled, this.pushSync);
+    if (this.allowShareTo) {
+      copyShareExtFiles(this.buildDir);
+      modifyShareViewController(this.buildDir, "MY_GROUP_ID");
+    }
+    modifyAppDelegate(
+      this.buildDir,
+      this.backgroundSyncEnabled,
+      this.pushSync,
+      this.allowShareTo
+    );
   }
 
   private async handleAndroidPlatform() {
