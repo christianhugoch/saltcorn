@@ -901,47 +901,48 @@ export function modifyAppDelegate(
 @UIApplicationMain`
     );
 
-    content = content.replace(
-      /}\s*$/,
-      `
-        let store = ShareStore.store
-
-        func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
-            
-            var success = true
-            if CAPBridge.handleOpenUrl(url, options) {
-                success = ApplicationDelegateProxy.shared.application(app, open: url, options: options)
-            }
-            
-            guard let components = NSURLComponents(url: url, resolvingAgainstBaseURL: true),
-                  let params = components.queryItems else {
-                      return false
-                  }
-            let titles = params.filter { $0.name == "title" }
-            let descriptions = params.filter { $0.name == "description" }
-            let types = params.filter { $0.name == "type" }
-            let urls = params.filter { $0.name == "url" }
-            
-            store.shareItems.removeAll()
+    const replacement = `
+    let store = ShareStore.store
+    
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
         
-            if(titles.count > 0){
-                for index in 0...titles.count-1 {
-                    var shareItem: JSObject = JSObject()
-                    shareItem["title"] = titles[index].value!
-                    shareItem["description"] = descriptions[index].value!
-                    shareItem["type"] = types[index].value!
-                    shareItem["url"] = urls[index].value!
-                    store.shareItems.append(shareItem)
-                }
+        var success = true
+        if CAPBridge.handleOpenUrl(url, options) {
+            success = ApplicationDelegateProxy.shared.application(app, open: url, options: options)
+        }
+        
+        guard let components = NSURLComponents(url: url, resolvingAgainstBaseURL: true),
+              let params = components.queryItems else {
+                  return false
+              }
+        let titles = params.filter { $0.name == "title" }
+        let descriptions = params.filter { $0.name == "description" }
+        let types = params.filter { $0.name == "type" }
+        let urls = params.filter { $0.name == "url" }
+        
+        store.shareItems.removeAll()
+    
+        if (titles.count > 0) {
+            for index in 0...titles.count-1 {
+                var shareItem: JSObject = JSObject()
+                shareItem["title"] = titles[index].value!
+                shareItem["description"] = descriptions[index].value!
+                shareItem["type"] = types[index].value!
+                shareItem["url"] = urls[index].value!
+                store.shareItems.append(shareItem)
             }
-            
-            store.processed = false
-            let nc = NotificationCenter.default
-            nc.post(name: Notification.Name("triggerSendIntent"), object: nil )
-            
-            return success
-        }`
-    );
+        }
+        
+        store.processed = false
+        let nc = NotificationCenter.default
+        nc.post(name: Notification.Name("triggerSendIntent"), object: nil )
+        
+        return success
+    }
+  }`;
+    const regex =
+      /func application\(_ app: UIApplication,\s*open url: URL,\s*options:\s*\[UIApplication\.OpenURLOptionsKey\s*:\s*Any\]\s*=\s*\[:\]\)\s*->\s*Bool\s*\{[\s\S]*?\n\}/;
+    content = content.replace(regex, replacement);
   }
 
   writeFileSync(appDelegateFile, content, "utf8");

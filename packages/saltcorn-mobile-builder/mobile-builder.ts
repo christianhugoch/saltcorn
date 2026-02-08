@@ -57,6 +57,7 @@ export type IosCfg = {
     guuid: string;
     specifier: string;
     identifier: string;
+    appGroupId?: string;
   };
 };
 
@@ -358,7 +359,11 @@ export class MobileBuilder {
     }
     if (this.allowShareTo) {
       copyShareExtFiles(this.buildDir);
-      modifyShareViewController(this.buildDir, "MY_GROUP_ID");
+      if (this.iosParams?.shareExtensionProvisioningProfile?.appGroupId)
+        modifyShareViewController(
+          this.buildDir,
+          this.iosParams?.shareExtensionProvisioningProfile?.appGroupId
+        );
     }
     modifyAppDelegate(
       this.buildDir,
