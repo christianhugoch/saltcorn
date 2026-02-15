@@ -19,8 +19,10 @@ import Trigger from "../models/trigger";
 import WorkflowRun from "../models/workflow_run";
 import Notification from "../models/notification";
 import File from "../models/file";
+import { Where } from "@saltcorn/db-common/internal";
 
-const { getState } = require("../db/state");
+import stateModule from "../db/state";
+const { getState } = stateModule;
 const {
   getMailTransport,
   viewToEmailHtml,
@@ -54,12 +56,18 @@ const MetaData = require("../models/metadata");
 
 import type { GenObj } from "@saltcorn/types/common_types";
 import type { Req, Res } from "@saltcorn/types/base_types";
+import type { Row } from "@saltcorn/db-common/internal";
 
 //action use cases: field modify, like/rate (insert join), notify, send row to webhook
 // todo add translation
 
 const consoleInterceptor = (state: any) => {
-  const handle = (printer: any, level: number, message: any, optionalParams: any[]) => {
+  const handle = (
+    printer: any,
+    level: number,
+    message: any,
+    optionalParams: any[]
+  ) => {
     printer(message, ...optionalParams);
     if (state.hasJoinedLogSockets && state.logLevel >= level) {
       const s = ppVal(message);
@@ -86,20 +94,23 @@ const consoleInterceptor = (state: any) => {
   };
 };
 
-const emit_to_client = (user: any) => (data: any, userIds?: any) => {
-  const state = getState();
-  const enabled = getState().getConfig("enable_dynamic_updates", true);
-  if (!enabled) {
-    state.log(5, "emit_to_client called, but dynamic updates are disabled");
-    return;
-  }
-  const safeIds = Array.isArray(userIds)
-    ? userIds
-    : userIds
+const emit_to_client =
+  (user?: User) => (data: any, userIds?: number | number[]) => {
+    const state = getState()!;
+    const enabled = getState()!.getConfig("enable_dynamic_updates", true);
+    if (!enabled) {
+      state.log(5, "emit_to_client called, but dynamic updates are disabled");
+      return;
+    }
+    const safeIds = Array.isArray(userIds)
+      ? userIds
+      : userIds
       ? [userIds]
-      : (user?.id ? [user.id] : []);
-  state.emitDynamicUpdate(db.getTenantSchema(), data, safeIds);
-};
+      : user?.id
+      ? [user.id]
+      : [];
+    state.emitDynamicUpdate(db.getTenantSchema(), data, safeIds);
+  };
 
 /**
  * @param opts
@@ -119,28 +130,28 @@ const run_code = async ({
   user,
   ...rest
 }: {
-  row?: any;
-  table?: any;
+  row?: Row;
+  table?: Table;
   channel?: string;
   configuration: { code: string; run_where: string };
-  user?: any;
+  user?: User;
   [key: string]: any;
 }): Promise<any> => {
   if (run_where === "Client page")
     return {
       eval_js: code,
       row,
-      field_names: table ? table.fields.map((f: any) => f.name) : undefined,
+      field_names: table ? table.fields.map((f) => f.name) : undefined,
     };
   if (!isNode()) {
-    const { isOfflineMode } = getState().mobileConfig;
+    const { isOfflineMode } = getState()!.mobileConfig || {};
     if (!isOfflineMode && run_where === "Server") {
       // stop on the app and run the action server side
       return { server_eval: true };
     }
   }
-  const Actions: any = {};
-  Object.entries(getState().actions).forEach(([k, v]: [string, any]) => {
+  const Actions: Record<string, Function> = {};
+  Object.entries(getState()!.actions).forEach(([k, v]: [string, any]) => {
     Actions[k] = (args = {}) => {
       return v.run({ row, table, user, configuration: args, ...rest, ...args });
     };
@@ -160,7 +171,7 @@ const run_code = async ({
           ...args,
         });
       } else {
-        const state_action = getState().actions[trigger.action];
+        const state_action = getState()!.actions[trigger.action];
         return state_action.run({
           row,
           table,
@@ -184,19 +195,22 @@ const run_code = async ({
       ...restArgs,
     });
   };
-  const emitEvent = (eventType: any, channel: any, payload: any) =>
+  const emitEvent = (eventType: string, channel: string | null, payload: any) =>
     Trigger.emitEvent(eventType, channel, user, payload);
-  const fetchJSON = async (...args: any[]) => await (await fetch(...args)).json();
-  const sysState = getState();
-  const require = (nm: any) => sysState.codeNPMmodules[nm];
-  const refreshSystemCache = async (which: any) => {
+  const fetchJSON = async (...args: any[]) =>
+    await (await fetch(...args)).json();
+  const sysState: any = getState()!;
+  const require = (nm: string) => sysState.codeNPMmodules[nm];
+  const refreshSystemCache = async (which?: string) => {
     //this worker
     if (which) await sysState[`refresh_${which}`](true);
     else await sysState.refresh(true);
     //other workers
     db.whenTransactionisFree(async () => {
-      if (which) await getState()[`refresh_${which}`]();
-      else await getState().refresh();
+      if (which) {
+        const state: any = getState();
+        await state[`refresh_${which}`]();
+      } else await getState()!.refresh(false);
     });
   };
   const f = vm.runInNewContext(`async () => {${code}\n}`, {
@@ -235,9 +249,9 @@ const run_code = async ({
     interpolate,
     require,
     refreshSystemCache,
-    setConfig: (k: any, v: any) =>
+    setConfig: (k: string, v: any) =>
       sysState.isFixedConfig(k) ? undefined : sysState.setConfig(k, v),
-    getConfig: (k: any) =>
+    getConfig: (k: string) =>
       sysState.isFixedConfig(k) ? undefined : sysState.getConfig(k),
     channel: table ? table.name : channel,
     session_id: rest.req && getSessionId(rest.req),
@@ -245,7 +259,7 @@ const run_code = async ({
     page_load_tag: rest?.req?.headers?.["page-load-tag"],
     request_ip: rest?.req?.ip,
     ...(row || {}),
-    ...getState().eval_context,
+    ...getState()!.eval_context,
     ...rest,
   });
   return await f();
@@ -323,7 +337,15 @@ export = {
       row,
       configuration: { eventType, channel, payload },
       user,
-    }: any) => {
+    }: {
+      row: Row;
+      configuration: {
+        eventType: string;
+        channel?: string;
+        payload?: any;
+      };
+      user?: User;
+    }) => {
       return await Trigger.emitEvent(
         eventType,
         channel,
@@ -345,9 +367,9 @@ export = {
       const trigger_actions = trigger_actions0.sort(
         comparingCaseInsensitive("name")
       );
-      const order_options: any = {};
+      const order_options: Record<string, string[]> = {};
       for (const table of tables) {
-        order_options[table.name] = table.fields.map((f: any) => f.name);
+        order_options[table.name] = table.fields.map((f) => f.name);
         order_options[table.name].push("RANDOM()");
       }
 
@@ -433,10 +455,23 @@ export = {
       },
       user,
       ...rest
-    }: any) => {
+    }: {
+      row: Row;
+      configuration: {
+        table_name: string;
+        where?: Where;
+        limit?: number;
+        orderBy?: string;
+        orderDesc?: boolean;
+        trigger_id?: number;
+        interval?: number;
+      };
+      user?: User;
+      [key: string]: unknown;
+    }) => {
       const table = Table.findOne({ name: table_name });
       const wh = where ? eval_expression(where, row, user) : {};
-      const selOpts: any = { orderDesc, orderBy };
+      const selOpts: GenObj = { orderDesc, orderBy };
       if (limit) selOpts.limit = limit;
       const rows = await table!.getRows(wh, selOpts);
       const trigger = Trigger.findOne({ id: trigger_id });
@@ -469,14 +504,18 @@ export = {
    */
   webhook: {
     description: "Make an outbound HTTP/HTTPS request",
-    configFields: async ({ table, mode }: any) => {
-      let field_opts = [];
+    configFields: async ({ table, mode }: { table: Table; mode: string }) => {
+      let field_opts: string[] = [];
       if (table) {
         field_opts = table.fields
           .filter(
-            (f: any) => f.type && ["String", "HTML", "JSON"].includes(f.type.name)
+            (f) =>
+              f.type &&
+              ["String", "HTML", "JSON"].includes(
+                typeof f.type === "string" ? f.type : f.type?.name
+              )
           )
-          .map((f: any) => f.name);
+          .map((f) => f.name);
       }
       return [
         {
@@ -546,7 +585,19 @@ export = {
         response_var,
         method,
       },
-    }: any) => {
+    }: {
+      row?: Row;
+      user?: User;
+      table?: Table;
+      configuration: {
+        url: string;
+        body?: string;
+        authorization?: string;
+        response_field?: string;
+        response_var?: string;
+        method?: string;
+      };
+    }) => {
       let url1 = interpolate(url, row, user, "Webhook URL");
 
       const fetchOpts = {
@@ -594,6 +645,7 @@ export = {
           : await response.text();
         const saveResponse =
           isJSON &&
+          typeof field?.type !== "string" &&
           (field?.type?.name === "String" || field?.type?.sql_name === "text")
             ? JSON.stringify(parsedResponse)
             : parsedResponse;
@@ -641,8 +693,18 @@ export = {
      * @param {object} opts.user
      * @returns {Promise<object>}
      */
-    run: async ({ row, table, configuration: { viewname }, user }: any) => {
-      const view = await View.findOne({ name: viewname });
+    run: async ({
+      row,
+      table,
+      configuration: { viewname },
+      user,
+    }: {
+      row: Row;
+      table?: Table;
+      configuration: { viewname: string };
+      user: User;
+    }) => {
+      const view = View.findOne({ name: viewname });
       if (!view)
         throw new Error(
           `In find_or_create_dm_room action, Room view ${viewname} does not exist`
@@ -699,7 +761,7 @@ export = {
      * @returns {Promise<object[]>}
      */
     description: "Send an email, based on a chosen view for this table",
-    configFields: async ({ table, mode }: any) => {
+    configFields: async ({ table, mode }: { table?: Table; mode?: string }) => {
       if (mode === "workflow") {
         return [
           {
@@ -764,27 +826,33 @@ export = {
       if (!table) return [];
       const views = await View.find_table_views_where(
         table,
-        ({ viewtemplate }: any) => viewtemplate?.runMany || viewtemplate?.renderRows
+        ({ viewtemplate }: any) =>
+          viewtemplate?.runMany || viewtemplate?.renderRows
       );
 
       const view_opts = views.map((v) => v.name);
       const fields = table.getFields();
       const field_opts = fields
         .filter(
-          (f: any) =>
-            (f.type && f.type.name === "String") || f.reftable_name === "users"
+          (f) =>
+            (typeof f.type === "object" && f.type.name === "String") ||
+            f.reftable_name === "users"
         )
-        .map((f: any) => f.name);
+        .map((f) => f.name);
       const body_field_opts = fields
         .filter(
-          (f: any) => f.type && (f.type.name === "HTML" || f.type.name === "String")
+          (f) =>
+            typeof f.type === "object" &&
+            (f.type.name === "HTML" || f.type.name === "String")
         )
-        .map((f: any) => f.name);
+        .map((f) => f.name);
       const confirm_field_opts = fields
         .filter(
-          (f: any) => f.type && (f.type.name === "Bool" || f.type.name === "Date")
+          (f) =>
+            typeof f.type === "object" &&
+            (f.type.name === "Bool" || f.type.name === "Date")
         )
-        .map((f: any) => f.name);
+        .map((f) => f.name);
       const attachment_opts = [""];
       for (const field of fields) {
         if (field.type === "File") attachment_opts.push(field.name);
@@ -950,8 +1018,31 @@ export = {
       },
       user,
       mode,
-    }: any) => {
-      const from = getState().getConfig("email_from");
+    }: {
+      row: Row;
+      table: Table;
+      configuration: {
+        body_type?: string;
+        body_field?: string;
+        viewname?: string;
+        subject?: string;
+        subject_formula?: string;
+        to_email: string;
+        to_email_field?: string;
+        to_email_fixed?: string;
+        cc_email?: string;
+        bcc_email?: string;
+        only_if?: string;
+        attachment_path?: string;
+        disable_notify?: boolean;
+        confirm_field?: string;
+        body?: string;
+        locale?: string;
+      };
+      user: User;
+      mode: string;
+    }) => {
+      const from = getState()!.getConfig("email_from");
 
       if (mode === "workflow") {
         const email = {
@@ -965,13 +1056,13 @@ export = {
           //          attachments,
         };
         const sendres = await (await getMailTransport()).sendMail(email);
-        getState().log(5, `send_email result: ${JSON.stringify(sendres)}`);
+        getState()!.log(5, `send_email result: ${JSON.stringify(sendres)}`);
         if (confirm_field)
           return { [confirm_field]: sendres.accepted.length > 0 };
         else return;
       }
       let to_addr;
-      let useRow = row;
+      let useRow: Row | null = row;
       const fvs = [
         ...freeVariablesInInterpolation(to_email_fixed),
         ...freeVariablesInInterpolation(cc_email),
@@ -1014,42 +1105,46 @@ export = {
           break;
         case "Field":
           const fields = table.getFields();
-          const field = fields.find((f: any) => f.name === to_email_field);
-          if (field && field.type.name === "String")
-            to_addr = row[to_email_field];
+          const field = fields.find((f) => f.name === to_email_field);
+          if (field && (field.type as any).name === "String")
+            to_addr = row[to_email_field as string];
           else if (field && field.reftable_name === "users") {
-            const refuser = await User.findOne({ id: row[to_email_field] });
+            const refuser = await User.findOne({
+              id: row[to_email_field as string],
+            });
             to_addr = refuser!.email;
           }
           break;
       }
       if (!to_addr) {
-        getState().log(
+        getState()!.log(
           2,
           `send_email action: Not sending as address ${to_email} is missing`
         );
         return;
       }
-      const setBody: any = {};
-      if (body_type === "Text field") {
+      const setBody: GenObj = {};
+      if (body_type === "Text field" && body_field) {
         setBody.text = row[body_field];
-      } else if (body_type === "HTML field") {
+      } else if (body_type === "HTML field" && body_field) {
         setBody.html = row[body_field];
-      } else if (body_type === "MJML field") {
+      } else if (body_type === "MJML field" && body_field) {
         const mjml = row[body_field];
         const html = mjml2html(mjml, { minify: true });
         setBody.html = html.html;
       } else {
-        const opts: any = {};
+        const opts: GenObj = {};
         if (locale) {
           opts.locale = interpolate(locale, useRow, user, "send_email locale");
-          const cfgLangs = getState().getConfig("localizer_languages");
+          const cfgLangs = getState()!.getConfig("localizer_languages");
           if (
             Object.values(cfgLangs || {})
               .map((r: any) => r.name)
               .includes(opts.locale)
           ) {
-            opts.locale = (Object.values(cfgLangs).find((r: any) => r.name) as any).locale;
+            opts.locale = (
+              Object.values(cfgLangs).find((r: any) => r.name) as any
+            ).locale;
           }
         }
         const view = await View.findOne({ name: viewname });
@@ -1071,7 +1166,7 @@ export = {
         ? eval_expression(subject, useRow, user, "send_email subject formula")
         : subject;
 
-      getState().log(
+      getState()!.log(
         3,
         `Sending email from ${from} to ${to_addr} with subject ${the_subject}`
       );
@@ -1092,25 +1187,27 @@ export = {
       };
       try {
         const sendres = await (await getMailTransport()).sendMail(email);
-        getState().log(5, `send_email result: ${JSON.stringify(sendres)}`);
+        getState()!.log(5, `send_email result: ${JSON.stringify(sendres)}`);
         if (confirm_field) {
           const confirm_fld = table.getField(confirm_field);
-          if (sendres.accepted.length > 0) {
-            if (confirm_fld && confirm_fld.type.name === "Date")
+          if (typeof confirm_fld?.type === "object") {
+            if (sendres.accepted.length > 0) {
+              if (confirm_fld && confirm_fld.type.name === "Date")
+                await table.updateRow(
+                  { [confirm_field]: new Date() },
+                  row[table.pk_name]
+                );
+              else if (confirm_fld && confirm_fld.type.name === "Bool")
+                await table.updateRow(
+                  { [confirm_field]: true },
+                  row[table.pk_name]
+                );
+            } else if (confirm_fld && confirm_fld.type.name === "Bool") {
               await table.updateRow(
-                { [confirm_field]: new Date() },
+                { [confirm_field]: false },
                 row[table.pk_name]
               );
-            else if (confirm_fld && confirm_fld.type.name === "Bool")
-              await table.updateRow(
-                { [confirm_field]: true },
-                row[table.pk_name]
-              );
-          } else if (confirm_fld && confirm_fld.type.name === "Bool") {
-            await table.updateRow(
-              { [confirm_field]: false },
-              row[table.pk_name]
-            );
+            }
           }
         }
         if (disable_notify) return;
@@ -1118,7 +1215,12 @@ export = {
       } catch (e) {
         if (confirm_field) {
           const confirm_fld = table.getField(confirm_field);
-          if (confirm_fld && confirm_fld.type.name === "Bool")
+          if (
+            confirm_fld &&
+            (typeof confirm_fld.type === "string"
+              ? confirm_fld.type === "Bool"
+              : confirm_fld.type?.name === "Bool")
+          )
             await table.updateRow(
               { [confirm_field]: false },
               row[table.pk_name]
@@ -1165,7 +1267,19 @@ export = {
      * @param {object} opts.user
      * @returns {Promise<object>}
      */
-    run: async ({ row, table, configuration: { joined_table }, user }: any) => {
+    run: async ({
+      row,
+      table,
+      configuration: { joined_table },
+      user,
+    }: {
+      row: Row;
+      table: Table;
+      configuration: {
+        joined_table: string;
+      };
+      user?: User;
+    }) => {
       if (!joined_table)
         throw new Error(`Relation not specified in insert_joined_row action`);
 
@@ -1176,7 +1290,7 @@ export = {
           `Table ${join_table_name} not found in insert_joined_row action`
         );
       const fields = joinTable.getFields();
-      const newRow: any = { [join_field]: row.id };
+      const newRow: GenObj = { [join_field]: row.id };
       for (const field of fields) {
         if (
           field.type === "Key" &&
@@ -1211,7 +1325,15 @@ export = {
      * @param {*} opts.user
      * @returns {Promise<object>}
      */
-    run: async ({ row, table, user }: any) => {
+    run: async ({
+      row,
+      table,
+      user,
+    }: {
+      row: Row;
+      table: Table;
+      user?: User;
+    }) => {
       const newRow = { ...row };
       table.getFields();
       delete newRow[table.pk_name];
@@ -1275,7 +1397,21 @@ export = {
      * @param {object} opts.configuration
      * @returns {Promise<void>}
      */
-    run: async ({ table, row, configuration, user }: any) => {
+    run: async ({
+      table,
+      row,
+      configuration,
+      user,
+    }: {
+      table?: Table;
+      row?: Row;
+      configuration: {
+        table: string;
+        only_triggering_row?: boolean;
+        where?: string;
+      };
+      user?: User;
+    }) => {
       const table_for_recalc = Table.findOne({
         name: configuration.table,
       });
@@ -1284,6 +1420,7 @@ export = {
 
       if (
         configuration.only_triggering_row &&
+        table &&
         table.name === table_for_recalc?.name &&
         row &&
         row[table.pk_name]
@@ -1359,7 +1496,25 @@ export = {
      * @param {...*} [opts.rest]
      * @returns {Promise<object|boolean>}
      */
-    run: async ({ row, table, configuration, user, referrer, ...rest }: any) => {
+    run: async ({
+      row,
+      table,
+      configuration,
+      user,
+      referrer,
+      ...rest
+    }: {
+      row?: Row;
+      table?: Table;
+      configuration: {
+        table: string;
+        row_expr: string;
+        id_variable?: string;
+      };
+      user?: User;
+      referrer?: string;
+      [key: string]: any;
+    }) => {
       const state = urlStringToObject(referrer);
       const f = get_async_expression_function(
         configuration.row_expr,
@@ -1373,11 +1528,11 @@ export = {
       );
       const calcrow = await f(row || {}, user);
       const table_for_insert = Table.findOne({ name: configuration.table });
-      const all_results: any = {};
-      const ids: any[] = [];
+      const all_results: GenObj = {};
+      const ids: number[] = [];
 
-      const upsertOne = async (row: any) => {
-        const results: any = {};
+      const upsertOne = async (row: Row) => {
+        const results: GenObj = {};
         if (row[table_for_insert!.pk_name]) {
           const existing = await table_for_insert!.getRow({
             [table_for_insert!.pk_name]: row[table_for_insert!.pk_name],
@@ -1390,7 +1545,8 @@ export = {
               { resultCollector: results }
             );
             ids.push(row[table_for_insert!.pk_name]);
-          } else ids.push(await table_for_insert!.insertRow(row, user, results));
+          } else
+            ids.push(await table_for_insert!.insertRow(row, user, results));
         } else ids.push(await table_for_insert!.insertRow(row, user, results));
 
         mergeActionResults(all_results, results);
@@ -1447,10 +1603,10 @@ export = {
                     when_trigger === "Validate"
                       ? ["Row"]
                       : mode === "filter"
-                        ? ["Filter state"]
-                        : mode === "workflow"
-                          ? ["Database", "Active edit view"]
-                          : ["Form", "Database"],
+                      ? ["Filter state"]
+                      : mode === "workflow"
+                      ? ["Database", "Active edit view"]
+                      : ["Form", "Database"],
                 },
               },
             ]
@@ -1769,7 +1925,18 @@ export = {
         showIf: { control_action: ["Goto step"] },
       },
     ],
-    run: async ({ row, user, configuration: { control_action, step } }: any) => {
+    run: async ({
+      row,
+      user,
+      configuration: { control_action, step },
+    }: {
+      row?: Row;
+      user?: User;
+      configuration: {
+        control_action: string;
+        step?: string;
+      };
+    }) => {
       switch (control_action) {
         case "Halt steps":
           return { halt_steps: true };
@@ -1836,7 +2003,8 @@ export = {
                 let folder = field?.attributes?.folder;
                 if (Array.isArray(viewColumns)) {
                   const col = viewColumns.find(
-                    (c: any) => c?.type === "Field" && c.field_name === field.name
+                    (c: any) =>
+                      c?.type === "Field" && c.field_name === field.name
                   );
                   let cfgFolder = col?.configuration?.folder;
                   if (typeof cfgFolder === "string" && cfgFolder.length) {
@@ -1868,7 +2036,7 @@ export = {
                 set_fields: { [table.pk_name]: result.success },
               };
             else {
-              getState().log(
+              getState()!.log(
                 3,
                 `form_actions Save failed server side, result: ${JSON.stringify(
                   result
@@ -1888,7 +2056,7 @@ export = {
               if (!updateres?.error)
                 return { notify_success: req ? req.__("Saved") : "Saved" };
               else {
-                getState().log(
+                getState()!.log(
                   3,
                   `form_actions Save update failed server side, result: ${JSON.stringify(
                     updateres
@@ -1940,7 +2108,9 @@ export = {
       ...rest
     }: any) => {
       return {
-        eval_js: `navigator.clipboard.writeText(${JSON.stringify(interpolate(text_template || "", row || {}, user))})`,
+        eval_js: `navigator.clipboard.writeText(${JSON.stringify(
+          interpolate(text_template || "", row || {}, user)
+        )})`,
       };
     },
     namespace: "User interface",
@@ -1985,10 +2155,20 @@ export = {
       row,
       user,
       configuration: { type, notify_type, text, title, remove_delay },
-    }: any) => {
+    }: {
+      row?: Row;
+      user?: User;
+      configuration: {
+        type?: string;
+        notify_type?: string;
+        text: string;
+        title?: string;
+        remove_delay?: number;
+      };
+    }) => {
       //type is legacy. this name gave react problems
       let text1 = interpolate(text, row, user, "Toast text");
-      let toast_title: any = title
+      let toast_title: GenObj = title
         ? { toast_title: interpolate(title, row, user, "Toast title") }
         : {};
       if (remove_delay) toast_title.remove_delay = remove_delay;
@@ -2018,7 +2198,7 @@ export = {
      * @returns {Promise<object[]>}
      */
     description: "Run arbitrary JavaScript code",
-    configuration_summary: (cfg: any = {}) => {
+    configuration_summary: (cfg: GenObj = {}) => {
       const where = cfg.run_where || "Server";
       return `Run arbitrary JavaScript code on ${where}`;
     },
@@ -2026,7 +2206,7 @@ export = {
       formStyle: "vert",
     },
     configFields: async ({ table, when_trigger, mode }: any) => {
-      const fields = table ? table.getFields().map((f: any) => f.name) : [];
+      const fields = table ? table.getFields().map((f: Field) => f.name) : [];
       const vars = [
         ...(table ? ["row"] : []),
         "user",
@@ -2137,7 +2317,7 @@ export = {
      * @returns {Promise<object[]>}
      */
     description: "Run arbitrary JavaScript code from a String field",
-    configuration_summary: (cfg: any = {}) => {
+    configuration_summary: (cfg: GenObj = {}) => {
       const where = cfg.run_where || "Server";
       return `Run JavaScript from context field on ${where}`;
     },
@@ -2205,7 +2385,16 @@ export = {
       row,
       mode,
       ...rest
-    }: any) => {
+    }: {
+      table: Table;
+      configuration: {
+        code_field: string;
+        run_where?: string;
+      };
+      row: Row;
+      mode?: string;
+      [key: string]: any;
+    }) => {
       let code;
       if (code_field.includes(".")) {
         const [ref, target] = code_field.split(".");
@@ -2213,7 +2402,7 @@ export = {
         else if (!row[ref]) return;
         else {
           const keyfield = table.getField(ref);
-          const refTable = Table.findOne({ name: keyfield.reftable_name });
+          const refTable = Table.findOne({ name: keyfield!.reftable_name });
           const refRow = await refTable!.getRow({ [table.pk_name]: row[ref] });
           code = refRow![target];
         }
@@ -2223,7 +2412,7 @@ export = {
         ...rest,
         table,
         row,
-        configuration: { run_where, code },
+        configuration: { run_where: run_where || "Server", code },
       });
     },
     namespace: "Code",
@@ -2255,7 +2444,20 @@ export = {
     },
     disableInWorkflow: true,
     requireRow: true,
-    run: async ({ row, table, configuration: { viewname, ...flds }, user }: any) => {
+    run: async ({
+      row,
+      table,
+      configuration: { viewname, ...flds },
+      user,
+    }: {
+      row: Row;
+      table: Table;
+      configuration: {
+        viewname: string;
+        [key: string]: any;
+      };
+      user?: User;
+    }) => {
       const qs = Object.entries(flds)
         .map(([k, v]) =>
           v && typeof row[k] !== "undefined"
@@ -2290,16 +2492,31 @@ export = {
         },
       },
     ],
-    run: async ({ configuration: { language }, user, req, res }: any) => {
+    run: async ({
+      configuration: { language },
+      user,
+      req,
+      res,
+    }: {
+      configuration: {
+        language: string;
+      };
+      user?: User;
+      req: Req;
+      res?: Res;
+    }) => {
       if (user?.id) {
         const u: any = await User.findForSession({ id: user.id });
         await u.set_language(language);
         req.login(u.session_object, function (err: any) {
           if (!err) {
-            req.flash("success", req.__("Language changed to %s", language));
+            (req as any).flash(
+              "success",
+              (req as any).__("Language changed to %s", language)
+            );
             return { reload_page: true };
           } else {
-            req.flash("danger", err);
+            (req as any).flash("danger", err);
           }
         });
       } else {
@@ -2324,10 +2541,10 @@ export = {
       "Synchronize a database table with an external/provider table by copying rows from the external table",
     configFields: async ({ table }: any) => {
       const tables = await Table.find_with_external();
-      const pk_options: any = {};
+      const pk_options: Record<string, string[]> = {};
       for (const table of tables) {
         const fields = table.getFields();
-        pk_options[table.name] = fields.map((f: any) => f.name);
+        pk_options[table.name] = fields.map((f) => f.name);
       }
       return [
         {
@@ -2419,8 +2636,10 @@ export = {
     }: any) => {
       // set difference: a - b
       // https://stackoverflow.com/a/36504668/19839414
-      const set_diff = (a: any, b: any) => new Set([...a].filter((x: any) => !b.has(x)));
-      let set_intersect = (a: any, b: any) => new Set([...a].filter((x: any) => b.has(x)));
+      const set_diff = (a: any, b: any) =>
+        new Set([...a].filter((x: any) => !b.has(x)));
+      let set_intersect = (a: any, b: any) =>
+        new Set([...a].filter((x: any) => b.has(x)));
 
       const source_table = Table.findOne({ name: table_src });
       if (!source_table) return { error: "Source table not found" };
@@ -2432,12 +2651,14 @@ export = {
       if (!source_rows) return { error: "No data received" };
       const table_for_insert = Table.findOne({ name: table_dest });
       const dest_rows = await table_for_insert!.getRows({});
-      const srcPKfield = source_table.fields.find((f: any) => f.primary_key)!.name;
+      const srcPKfield = source_table.fields.find(
+        (f: any) => f.primary_key
+      )!.name;
       const src_pks = new Set(source_rows.map((r: any) => r[srcPKfield]));
       const dest_pks = new Set(dest_rows.map((r: any) => r[pk_field]));
       let match_expr;
       if (match_field_names) {
-        const matched_fields: any[] = [];
+        const matched_fields: [string, string][] = [];
         const dest_fields = table_for_insert!.getFields();
         const src_fields = source_table.getFields();
         dest_fields.forEach((df: any) => {
@@ -2475,7 +2696,7 @@ export = {
       //update existing
       for (const existPK of Array.from(set_intersect(src_pks, dest_pks))) {
         const srcRow = source_rows.find((r: any) => r[srcPKfield] === existPK);
-        const newRow: any = {
+        const newRow: Row = {
           [pk_field]: existPK,
           ...eval_expression(match_expr || row_expr, srcRow),
         };
@@ -2485,7 +2706,7 @@ export = {
         const is_different_for_key = (k: any) => newRow[k] != existingRow![k];
 
         if (Object.keys(newRow).some(is_different_for_key)) {
-          const upd: any = {};
+          const upd: Row = {};
           Object.keys(newRow).forEach((k) => {
             if (is_different_for_key(k)) upd[k] = newRow[k];
           });
@@ -2531,7 +2752,15 @@ export = {
       row,
       user,
       configuration: { view, new_state_fml, interval },
-    }: any) => {
+    }: {
+      row?: Row;
+      user?: User;
+      configuration: {
+        view: string;
+        new_state_fml?: string;
+        interval?: number;
+      };
+    }) => {
       let eval_js = `reload_embedded_view('${view}')`;
       if (new_state_fml) {
         const new_state = eval_expression(
@@ -2662,7 +2891,14 @@ export = {
       },
     ],
 
-    run: async ({ configuration: { seconds, sleep_where } }: any) => {
+    run: async ({
+      configuration: { seconds, sleep_where },
+    }: {
+      configuration: {
+        seconds?: number;
+        sleep_where?: string;
+      };
+    }) => {
       if (sleep_where === "Server") {
         await sleep((seconds || 0) * 1000);
         return;
@@ -2678,7 +2914,7 @@ export = {
   refresh_user_session: {
     description: "Refresh the user session with row from the users table",
 
-    run: async ({ user, req }: any) => {
+    run: async ({ user, req }: { user?: User; req: Req }) => {
       if (!user?.id) return;
       const u = await User.findOne({ id: user.id });
       if (!u) return;
@@ -2722,23 +2958,32 @@ export = {
       row,
       user,
       configuration: { title, body, link, user_spec },
-    }: any) => {
+    }: {
+      row?: Row;
+      user?: User;
+      configuration: {
+        title: string;
+        body?: string;
+        link?: string;
+        user_spec: string | number | GenObj;
+      };
+    }) => {
       const user_where =
         //first two cases are for programmatic use
         typeof user_spec === "number"
           ? { id: user_spec }
           : typeof user_spec === "object"
-            ? user_spec
-            : User.valid_email(user_spec)
-              ? { email: user_spec }
-              : user_spec === "*"
-                ? {}
-                : eval_expression(
-                    user_spec,
-                    row || {},
-                    user,
-                    "Notify user user where"
-                  );
+          ? user_spec
+          : User.valid_email(user_spec)
+          ? { email: user_spec }
+          : user_spec === "*"
+          ? {}
+          : eval_expression(
+              user_spec,
+              row || {},
+              user,
+              "Notify user user where"
+            );
       const users = await User.find(user_where);
       for (const user of users) {
         await Notification.create({
@@ -2757,16 +3002,16 @@ export = {
       "Convert session id fields to user key fields on a table on Login events",
     configFields: async ({ table }: any) => {
       const tables = await Table.find_with_external();
-      const sess_options: any = {};
-      const user_options: any = {};
+      const sess_options: Record<string, string[]> = {};
+      const user_options: Record<string, string[]> = {};
       for (const table of tables) {
         const fields = table.getFields();
         sess_options[table.name] = fields
           .filter((f: any) => f.type?.name === "String")
-          .map((f: any) => f.name);
+          .map((f) => f.name);
         user_options[table.name] = fields
           .filter((f: any) => f.reftable_name === "users")
-          .map((f: any) => f.name);
+          .map((f) => f.name);
       }
       return [
         {
@@ -2803,7 +3048,15 @@ export = {
       row,
       configuration: { table_name, session_field, user_field },
       user,
-    }: any) => {
+    }: {
+      row?: Row & { old_session_id?: string };
+      configuration: {
+        table_name: string;
+        session_field: string;
+        user_field: string;
+      };
+      user?: User;
+    }) => {
       if (!row?.old_session_id || !user || !session_field || !user_field)
         return;
       const table = Table.findOne({ name: table_name });
@@ -2812,7 +3065,10 @@ export = {
         [user_field]: null,
       });
       for (const dbrow of rows) {
-        await table!.updateRow({ [user_field]: user.id }, dbrow[table!.pk_name]);
+        await table!.updateRow(
+          { [user_field]: user.id },
+          dbrow[table!.pk_name]
+        );
       }
     },
     namespace: "Database",
@@ -2823,7 +3079,7 @@ export = {
     disableIf: () => !Model.has_templates,
     configFields: async () => {
       const models = await Model.find({});
-      const explainers: any = {};
+      const explainers: Record<string, string> = {};
       for (const model of models) {
         try {
           const table = Table.findOne({ id: model.table_id });
@@ -2836,7 +3092,7 @@ export = {
           if (hyperparameter_fields.length)
             explainers[model.id!] =
               "Hyperparamter fields: " +
-              hyperparameter_fields.map((f: any) => f.name).join(",");
+              hyperparameter_fields.map((f) => f.name).join(",");
         } catch {
           //ignore
         }
@@ -2848,7 +3104,9 @@ export = {
           input_type: "select",
           required: true,
           options: models.map((model) => ({
-            label: `${model.name} [${model.modelpattern} on ${Table.findOne({ id: model.table_id })!.name}]`,
+            label: `${model.name} [${model.modelpattern} on ${
+              Table.findOne({ id: model.table_id })!.name
+            }]`,
             value: model.id,
           })),
           attributes: {
@@ -2889,7 +3147,16 @@ export = {
       row,
       configuration: { model_id, instance_name, where, hyperparameters },
       user,
-    }: any) => {
+    }: {
+      row?: Row;
+      configuration: {
+        model_id: number;
+        instance_name: string;
+        where?: string;
+        hyperparameters?: string;
+      };
+      user?: User;
+    }) => {
       const use_instance_name = interpolate(
         instance_name,
         row || {},
@@ -2929,7 +3196,7 @@ export = {
           },
         ];
       }
-      let field_opts = [];
+      let field_opts: string[] = [];
       if (table) {
         field_opts = table.fields
           .filter((f: any) => f.type === "File")
@@ -2950,7 +3217,15 @@ export = {
       configuration: { filepath_expr, file_field },
       user,
       mode,
-    }: any) => {
+    }: {
+      row?: Row;
+      configuration: {
+        filepath_expr?: string;
+        file_field?: string;
+      };
+      user?: User;
+      mode?: string;
+    }) => {
       let filepath;
       if (mode === "workflow") {
         filepath = eval_expression(
@@ -2959,7 +3234,7 @@ export = {
           user,
           "download filepath formula"
         );
-      } else filepath = row[file_field];
+      } else filepath = row![file_field!];
       if (!filepath) return;
       const file = await File.findOne(filepath);
       if (!file) throw new Error("File not found");
@@ -2976,8 +3251,8 @@ export = {
   install_progressive_web_app: {
     description: "Install a Progressive Web Application",
     configFields: () => [],
-    run: async ({ req }: any) => {
-      const pwaEnabled = await getState().getConfig("pwa_enabled", false);
+    run: async ({ req }: { req: Req }) => {
+      const pwaEnabled = await getState()!.getConfig("pwa_enabled", false);
       return pwaEnabled
         ? { eval_js: "installPWA()" }
         : { error: req.__("Progressive Web Application is not enabled") };
