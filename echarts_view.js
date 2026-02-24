@@ -127,12 +127,26 @@ const configuration_workflow = () =>
                   plot_type: multiAblePlots,
                 },
               },
+              new FieldRepeat({
+                name: "outcomes",
+                label: "Outcomes",
+                showIf: { plot_type: "bar" },
+                fields: [
+                  {
+                    name: "outcome_field",
+                    label: "Outcome field",
+                    type: "String",
+                    required: true,
+                    attributes: { options: outcome_fields },
+                  },
+                ],
+              }),
               {
                 name: "outcome_field",
                 label: "Outcome field",
                 type: "String",
                 required: true,
-                showIf: { plot_type: ["bar", "pie"] },
+                showIf: { plot_type: "pie" },
                 attributes: { options: outcome_fields },
               },
               {
@@ -359,6 +373,7 @@ const prepChartData = (
     series,
     factor_field,
     outcome_field,
+    outcomes,
     statistic,
     group_field,
     histogram_field,
@@ -371,10 +386,9 @@ const prepChartData = (
       .map((v) => [v]);
   }
   if (plot_type === "bar" || plot_type === "pie") {
-    const isCount = outcome_field === "Row count";
     const stat = (statistic || "count").toLowerCase();
     const aggregateField = (groupRows, field) => {
-      if (isCount || stat === "count") return groupRows.length;
+      if (field === "Row count" || stat === "count") return groupRows.length;
       const vals = groupRows
         .map((r) => r[field])
         .filter((v) => v !== null && v !== undefined);
@@ -388,19 +402,25 @@ const prepChartData = (
     const allCategories = [
       ...new Set(rows.map((r) => String(r[factor_field]))),
     ];
-    const values = allCategories.map((cat) =>
-      aggregateField(
-        rows.filter((r) => String(r[factor_field]) === cat),
-        outcome_field
-      )
-    );
     if (plot_type === "pie") {
-      return allCategories.map((cat, i) => ({ name: cat, value: values[i] }));
+      return allCategories.map((cat) => ({
+        name: cat,
+        value: aggregateField(
+          rows.filter((r) => String(r[factor_field]) === cat),
+          outcome_field
+        ),
+      }));
     }
-    return {
-      categories: allCategories,
-      series: [{ name: outcome_field || "Count", values }],
-    };
+    const seriesData = (outcomes || []).map(({ outcome_field: of }) => ({
+      name: of || "Count",
+      values: allCategories.map((cat) =>
+        aggregateField(
+          rows.filter((r) => String(r[factor_field]) === cat),
+          of
+        )
+      ),
+    }));
+    return { categories: allCategories, series: seriesData };
   }
   if (plot_series === "group_by_field" && group_field) {
     const diffvals = new Set(rows.map((r) => r[group_field]));
@@ -430,6 +450,7 @@ const loadRows = async (
     series,
     factor_field,
     outcome_field,
+    outcomes,
     group_field,
     histogram_field,
   },
@@ -460,7 +481,11 @@ const loadRows = async (
     } else {
       qfields.push(factor_field);
     }
-    if (outcome_field && outcome_field !== "Row count") {
+    if (plot_type === "bar") {
+      for (const { outcome_field: of } of outcomes || []) {
+        if (of && of !== "Row count") qfields.push(of);
+      }
+    } else if (outcome_field && outcome_field !== "Row count") {
       qfields.push(outcome_field);
     }
   } else if (
