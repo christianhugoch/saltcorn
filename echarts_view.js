@@ -8,7 +8,7 @@ const {
   stateFieldsToWhere,
 } = require("@saltcorn/data/plugin-helper");
 
-const multiAblePlots = ["line", "area", "scatter", "bar"];
+const multiAblePlots = ["line", "area", "scatter"];
 
 const configuration_workflow = () =>
   new Workflow({
@@ -24,6 +24,20 @@ const configuration_workflow = () =>
               (f) => ["Integer", "String"].includes(f.type.name) || f.is_fkey
             )
             .map((f) => f.name);
+          const factor_fields = fields
+            .filter(
+              (f) =>
+                ["String", "Bool", "Integer"].includes(f.type.name) || f.is_fkey
+            )
+            .map((f) => f.name);
+          const outcome_fields = [
+            "Row count",
+            ...fields
+              .filter((f) =>
+                ["Float", "Integer", "Money"].includes(f.type.name)
+              )
+              .map((f) => f.name),
+          ];
           return new Form({
             fields: [
               {
@@ -69,7 +83,10 @@ const configuration_workflow = () =>
                 label: "Y field",
                 type: "String",
                 required: true,
-                showIf: { plot_series: ["single", "group_by_field"] },
+                showIf: {
+                  plot_series: ["single", "group_by_field"],
+                  plot_type: ["line", "area", "scatter"],
+                },
                 attributes: { options: fieldOptions },
               },
               {
@@ -111,13 +128,34 @@ const configuration_workflow = () =>
                 },
               },
               {
+                name: "outcome_field",
+                label: "Outcome field",
+                type: "String",
+                required: true,
+                showIf: { plot_type: ["bar", "pie"] },
+                attributes: { options: outcome_fields },
+              },
+              {
+                name: "factor_field",
+                label: "Factor field",
+                type: "String",
+                required: true,
+                showIf: { plot_type: ["bar", "pie"] },
+                attributes: { options: factor_fields },
+              },
+              {
+                name: "statistic",
+                label: "Statistic",
+                type: "String",
+                required: true,
+                showIf: { plot_type: ["bar", "pie"] },
+                attributes: { options: ["Count", "Avg", "Sum", "Max", "Min"] },
+              },
+              {
                 name: "bar_stack",
                 label: "Stack series",
                 type: "Bool",
-                showIf: {
-                  plot_type: "bar",
-                  plot_series: ["multiple", "group_by_field"],
-                },
+                showIf: { plot_type: "bar" },
               },
               {
                 name: "bar_orientation",
@@ -136,22 +174,6 @@ const configuration_workflow = () =>
                 label: "Smooth line",
                 type: "Bool",
                 showIf: { plot_type: ["line", "area"] },
-              },
-              {
-                name: "pie_name_field",
-                label: "Name field",
-                type: "String",
-                required: true,
-                showIf: { plot_type: "pie" },
-                attributes: { options: fieldOptions },
-              },
-              {
-                name: "pie_value_field",
-                label: "Value field",
-                type: "String",
-                required: true,
-                showIf: { plot_type: "pie" },
-                attributes: { options: fieldOptions },
               },
               {
                 name: "pie_donut",
@@ -335,8 +357,9 @@ const prepChartData = (
     x_field,
     y_field,
     series,
-    pie_name_field,
-    pie_value_field,
+    factor_field,
+    outcome_field,
+    statistic,
     group_field,
     histogram_field,
   }
@@ -347,51 +370,37 @@ const prepChartData = (
       .filter((v) => v !== null && v !== undefined)
       .map((v) => [v]);
   }
-  if (plot_type === "bar") {
-    const allCategories = new Set();
-    let computed;
-    if (plot_series === "group_by_field" && group_field) {
-      const groups = {};
-      rows.forEach((r) => {
-        const grp = r[group_field] === null ? "null" : String(r[group_field]);
-        const val = String(r[y_field]);
-        if (!groups[grp]) groups[grp] = {};
-        groups[grp][val] = (groups[grp][val] || 0) + 1;
-        allCategories.add(val);
-      });
-      computed = Object.entries(groups).map(([name, counts]) => ({
-        name,
-        counts,
-      }));
-    } else {
-      const fieldList =
-        plot_series === "multiple" && series
-          ? series.map((s) => s.y_field)
-          : [y_field];
-      computed = fieldList.map((fieldName) => {
-        const counts = {};
-        rows.forEach((r) => {
-          const val = String(r[fieldName]);
-          counts[val] = (counts[val] || 0) + 1;
-          allCategories.add(val);
-        });
-        return { name: fieldName, counts };
-      });
-    }
-    const categories = [...allCategories];
-    return {
-      categories,
-      series: computed.map((s) => ({
-        name: s.name,
-        values: categories.map((cat) => s.counts[cat] || 0),
-      })),
+  if (plot_type === "bar" || plot_type === "pie") {
+    const isCount = outcome_field === "Row count";
+    const stat = (statistic || "count").toLowerCase();
+    const aggregateField = (groupRows, field) => {
+      if (isCount || stat === "count") return groupRows.length;
+      const vals = groupRows
+        .map((r) => r[field])
+        .filter((v) => v !== null && v !== undefined);
+      if (!vals.length) return 0;
+      if (stat === "sum") return vals.reduce((a, b) => a + b, 0);
+      if (stat === "avg") return vals.reduce((a, b) => a + b, 0) / vals.length;
+      if (stat === "max") return Math.max(...vals);
+      if (stat === "min") return Math.min(...vals);
+      return groupRows.length;
     };
-  }
-  if (plot_type === "pie") {
-    return rows.map((r) => ({
-      name: r[pie_name_field],
-      value: r[pie_value_field],
-    }));
+    const allCategories = [
+      ...new Set(rows.map((r) => String(r[factor_field]))),
+    ];
+    const values = allCategories.map((cat) =>
+      aggregateField(
+        rows.filter((r) => String(r[factor_field]) === cat),
+        outcome_field
+      )
+    );
+    if (plot_type === "pie") {
+      return allCategories.map((cat, i) => ({ name: cat, value: values[i] }));
+    }
+    return {
+      categories: allCategories,
+      series: [{ name: outcome_field || "Count", values }],
+    };
   }
   if (plot_series === "group_by_field" && group_field) {
     const diffvals = new Set(rows.map((r) => r[group_field]));
@@ -419,8 +428,8 @@ const loadRows = async (
     x_field,
     y_field,
     series,
-    pie_name_field,
-    pie_value_field,
+    factor_field,
+    outcome_field,
     group_field,
     histogram_field,
   },
@@ -434,33 +443,46 @@ const loadRows = async (
   const qfields = [];
 
   const gfield = fields.find((f) => f.name === group_field);
-  let group_by_joinfield = false;
+  let joinedConfigKey = null;
   if (plot_type === "histogram") {
     qfields.push(histogram_field);
+  } else if (plot_type === "bar" || plot_type === "pie") {
+    const factor_field_obj = fields.find((f) => f.name === factor_field);
+    if (
+      factor_field_obj?.is_fkey &&
+      factor_field_obj.attributes.summary_field
+    ) {
+      joinedConfigKey = "factor_field";
+      joinFields.__groupjoin = {
+        ref: factor_field,
+        target: factor_field_obj.attributes.summary_field,
+      };
+    } else {
+      qfields.push(factor_field);
+    }
+    if (outcome_field && outcome_field !== "Row count") {
+      qfields.push(outcome_field);
+    }
   } else if (
     plot_series === "group_by_field" &&
     group_field &&
     multiAblePlots.indexOf(plot_type) >= 0
   ) {
     if (gfield?.is_fkey && gfield.attributes.summary_field) {
-      group_by_joinfield = true;
+      joinedConfigKey = "group_field";
       joinFields.__groupjoin = {
         ref: group_field,
         target: gfield.attributes.summary_field,
       };
     }
-    if (plot_type !== "bar") qfields.push(x_field);
-    qfields.push(y_field);
-    if (!group_by_joinfield) qfields.push(group_field);
+    qfields.push(x_field, y_field);
+    if (!joinedConfigKey) qfields.push(group_field);
   } else if (
     plot_series === "multiple" &&
     series &&
     multiAblePlots.indexOf(plot_type) >= 0
   ) {
-    if (plot_type !== "bar") qfields.push(x_field);
     qfields.push(x_field, ...series.map((s) => s.y_field));
-  } else if (plot_type === "pie") {
-    qfields.push(pie_name_field, pie_value_field);
   } else {
     qfields.push(x_field, y_field);
   }
@@ -473,13 +495,13 @@ const loadRows = async (
     fields: qfields,
     ...(orderBy && { orderBy }),
   });
-  return { rows, group_by_joinfield };
+  return { rows, joinedConfigKey };
 };
 
 const run = async (table_id, viewname, config, state, { req }, queriesObj) => {
-  const { rows, group_by_joinfield } = await loadRows(table_id, config, state);
-  const effectiveConfig = group_by_joinfield
-    ? { ...config, group_field: "__groupjoin" }
+  const { rows, joinedConfigKey } = await loadRows(table_id, config, state);
+  const effectiveConfig = joinedConfigKey
+    ? { ...config, [joinedConfigKey]: "__groupjoin" }
     : config;
   const data = prepChartData(rows, effectiveConfig);
   const chartScript = buildChartScript(data, config);
