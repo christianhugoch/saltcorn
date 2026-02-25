@@ -2,11 +2,13 @@ const Workflow = require("@saltcorn/data/models/workflow");
 const Form = require("@saltcorn/data/models/form");
 const FieldRepeat = require("@saltcorn/data/models/fieldrepeat");
 const Table = require("@saltcorn/data/models/table");
-const { div, script, domReady } = require("@saltcorn/markup/tags");
+const { div, script, domReady, code } = require("@saltcorn/markup/tags");
 const {
   readState,
   stateFieldsToWhere,
 } = require("@saltcorn/data/plugin-helper");
+const { jsexprToWhere } = require("@saltcorn/data/models/expression");
+const { mergeIntoWhere } = require("@saltcorn/data/utils");
 
 const multiAblePlots = ["line", "area", "scatter"];
 
@@ -194,6 +196,25 @@ const configuration_workflow = () =>
                 label: "Donut",
                 type: "Bool",
                 showIf: { plot_type: "pie" },
+              },
+              {
+                name: "include_fml",
+                label: "Row inclusion formula",
+                class: "validate-expression",
+                sublabel:
+                  "Only include rows where this formula is true. " +
+                  "In scope: " +
+                  [
+                    ...fields.map((f) => f.name),
+                    "user",
+                    "year",
+                    "month",
+                    "day",
+                    "today()",
+                  ]
+                    .map((s) => code(s))
+                    .join(", "),
+                type: "String",
               },
             ],
           });
@@ -453,13 +474,19 @@ const loadRows = async (
     outcomes,
     group_field,
     histogram_field,
+    include_fml,
   },
-  state
+  state,
+  req
 ) => {
   const table = await Table.findOne({ id: table_id });
   const fields = await table.getFields();
   readState(state, fields);
   const where = await stateFieldsToWhere({ fields, state });
+  if (include_fml) {
+    const ctx = { ...state, user_id: req?.user?.id || null, user: req?.user };
+    mergeIntoWhere(where, jsexprToWhere(include_fml, ctx, fields) || {});
+  }
   const joinFields = {};
   const qfields = [];
 
@@ -524,7 +551,12 @@ const loadRows = async (
 };
 
 const run = async (table_id, viewname, config, state, { req }, queriesObj) => {
-  const { rows, joinedConfigKey } = await loadRows(table_id, config, state);
+  const { rows, joinedConfigKey } = await loadRows(
+    table_id,
+    config,
+    state,
+    req
+  );
   const effectiveConfig = joinedConfigKey
     ? { ...config, [joinedConfigKey]: "__groupjoin" }
     : config;
