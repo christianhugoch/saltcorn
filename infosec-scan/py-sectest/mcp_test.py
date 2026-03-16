@@ -2,6 +2,7 @@ import re
 import json
 import asyncio
 import logging
+import pytest
 from scsession import SaltcornSession
 from mcp.client.streamable_http import streamablehttp_client
 from mcp import ClientSession
@@ -23,6 +24,8 @@ class TestMcpServer:
         SaltcornSession.reset_to_fixtures()
         SaltcornSession.cli("install-plugin", AGENTS_PLUGIN)
         SaltcornSession.cli("install-plugin", MCP_SERVER_PLUGIN)
+        cls.api_token = SaltcornSession.cli("modify-user", "-g", ADMIN_EMAIL)
+        logger.info("API token: %s", cls.api_token)
         cls.sess = SaltcornSession(port=3001)
         cls._login(cls)
 
@@ -89,19 +92,53 @@ class TestMcpServer:
         )
         assert self.sess.status == 200, f"Configure failed with status {self.sess.status}"
 
+    def test_no_token_is_rejected(self):
+        """Requests without a bearer token must be rejected with 401."""
+        async def run():
+            async with streamablehttp_client(MCP_URL) as (read, write, _):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+
+        with pytest.raises(Exception) as exc_info:
+            asyncio.run(run())
+        exc = exc_info.value
+        all_messages = str(exc) + "".join(
+            str(e) for e in getattr(exc, "exceptions", [])
+        )
+        assert "401" in all_messages, f"Expected 401, got: {exc}"
+
+    def test_wrong_token_is_rejected(self):
+        """Requests with an invalid bearer token must be rejected with 401."""
+        async def run():
+            async with streamablehttp_client(
+                MCP_URL, headers={"Authorization": "Bearer invalid-token"}
+            ) as (read, write, _):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+
+        with pytest.raises(Exception) as exc_info:
+            asyncio.run(run())
+        exc = exc_info.value
+        all_messages = str(exc) + "".join(
+            str(e) for e in getattr(exc, "exceptions", [])
+        )
+        assert "401" in all_messages, f"Expected 401, got: {exc}"
+
     def test_list_tools(self):
         trigger_id = self._create_agent_trigger()
         self._configure_agent_trigger(trigger_id)
 
         async def run():
-            async with streamablehttp_client(MCP_URL) as (read, write, _):
+            async with streamablehttp_client(
+                MCP_URL, headers={"Authorization": f"Bearer {self.__class__.api_token}"}
+            ) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
 
                     result = await session.list_tools()
                     tool_names = [t.name for t in result.tools]
                     logger.info("Available tools: %s", tool_names)
-                    assert "insert_album" in tool_names, f"log_time not found in {tool_names}"
+                    assert "insert_album" in tool_names, f"insert_album not found in {tool_names}"
 
         asyncio.run(run())
 
@@ -110,7 +147,9 @@ class TestMcpServer:
         self._configure_agent_trigger(trigger_id)
 
         async def run():
-            async with streamablehttp_client(MCP_URL) as (read, write, _):
+            async with streamablehttp_client(
+                MCP_URL, headers={"Authorization": f"Bearer {self.__class__.api_token}"}
+            ) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
 
