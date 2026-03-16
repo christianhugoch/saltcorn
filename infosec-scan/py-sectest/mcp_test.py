@@ -53,7 +53,8 @@ class TestMcpServer:
             {
                 "name": "mcp_test_agent",
                 "action": "Agent",
-                "when_trigger": "Never",
+                "when_trigger": "API call",
+                "min_role": "1",
                 "_csrf": self.sess.csrf(),
             },
             allow_redirects=False,
