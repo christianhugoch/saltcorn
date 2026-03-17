@@ -3,8 +3,9 @@ import json
 import asyncio
 import logging
 import pytest
+import httpx
 from scsession import SaltcornSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 from mcp import ClientSession
 
 logging.basicConfig(level=logging.INFO)
@@ -16,6 +17,10 @@ AGENTS_PLUGIN = "@saltcorn/agents"
 ADMIN_EMAIL = "admin@foo.com"
 ADMIN_PASSWORD = "AhGGr6rhu45"
 MCP_URL = "http://localhost:3001/mcp"
+
+
+def auth_client(token):
+    return httpx.AsyncClient(headers={"Authorization": f"Bearer {token}"})
 
 
 class TestMcpServer:
@@ -99,7 +104,7 @@ class TestMcpServer:
     def test_no_token_is_rejected(self):
         """Requests without a bearer token must be rejected with 401."""
         async def run():
-            async with streamablehttp_client(MCP_URL) as (read, write, _):
+            async with streamable_http_client(MCP_URL) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
 
@@ -114,8 +119,8 @@ class TestMcpServer:
     def test_wrong_token_is_rejected(self):
         """Requests with an invalid bearer token must be rejected with 401."""
         async def run():
-            async with streamablehttp_client(
-                MCP_URL, headers={"Authorization": "Bearer invalid-token"}
+            async with streamable_http_client(
+                MCP_URL, http_client=httpx.AsyncClient(headers={"Authorization": "Bearer invalid-token"})
             ) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
@@ -130,8 +135,8 @@ class TestMcpServer:
 
     def test_list_tools(self):
         async def run():
-            async with streamablehttp_client(
-                MCP_URL, headers={"Authorization": f"Bearer {self.__class__.api_token}"}
+            async with streamable_http_client(
+                MCP_URL, http_client=auth_client(self.__class__.api_token)
             ) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
@@ -145,8 +150,8 @@ class TestMcpServer:
 
     def test_call_tool(self):
         async def run():
-            async with streamablehttp_client(
-                MCP_URL, headers={"Authorization": f"Bearer {self.__class__.api_token}"}
+            async with streamable_http_client(
+                MCP_URL, http_client=auth_client(self.__class__.api_token)
             ) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
@@ -166,8 +171,8 @@ class TestMcpServer:
     def test_insufficient_role_cannot_see_tool(self):
         """Staff (role_id=40) must not see tools from a trigger with min_role=1 (admin)."""
         async def run():
-            async with streamablehttp_client(
-                MCP_URL, headers={"Authorization": f"Bearer {self.__class__.staff_api_token}"}
+            async with streamable_http_client(
+                MCP_URL, http_client=auth_client(self.__class__.staff_api_token)
             ) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
@@ -187,8 +192,8 @@ class TestMcpServer:
         self._configure_agent_trigger(trigger_id)
 
         async def run():
-            async with streamablehttp_client(
-                MCP_URL, headers={"Authorization": f"Bearer {self.__class__.api_token}"}
+            async with streamable_http_client(
+                MCP_URL, http_client=auth_client(self.__class__.api_token)
             ) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
