@@ -180,3 +180,24 @@ class TestMcpServer:
                     )
 
         asyncio.run(run())
+
+    def test_name_collision_gets_suffixed(self):
+        """Two triggers with the same tool name must appear as _01 and _02."""
+        trigger_id = self._create_agent_trigger()
+        self._configure_agent_trigger(trigger_id)
+
+        async def run():
+            async with streamablehttp_client(
+                MCP_URL, headers={"Authorization": f"Bearer {self.__class__.api_token}"}
+            ) as (read, write, _):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+
+                    result = await session.list_tools()
+                    tool_names = [t.name for t in result.tools]
+                    logger.info("Tools with collision: %s", tool_names)
+                    assert "insert_album_01" in tool_names, f"insert_album_01 not found in {tool_names}"
+                    assert "insert_album_02" in tool_names, f"insert_album_02 not found in {tool_names}"
+                    assert "insert_album" not in tool_names, f"unsuffixed insert_album should not exist: {tool_names}"
+
+        asyncio.run(run())
