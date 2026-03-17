@@ -23,12 +23,12 @@ def auth_client(token):
     return httpx.AsyncClient(headers={"Authorization": f"Bearer {token}"})
 
 
-class TestMcpServer:
+class Test:
     @classmethod
     def setup_class(cls):
         SaltcornSession.reset_to_fixtures()
-        SaltcornSession.cli("install-plugin", AGENTS_PLUGIN)
-        SaltcornSession.cli("install-plugin", MCP_SERVER_PLUGIN)
+        SaltcornSession.cli("install-plugin", "-p", AGENTS_PLUGIN)
+        SaltcornSession.cli("install-plugin", "-p", MCP_SERVER_PLUGIN)
         cls.api_token = SaltcornSession.cli("modify-user", "-g", ADMIN_EMAIL)
         cls.staff_api_token = SaltcornSession.cli("modify-user", "-g", "staff@foo.com")
         logger.info("API token: %s", cls.api_token)
