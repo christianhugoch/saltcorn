@@ -25,9 +25,12 @@ class TestMcpServer:
         SaltcornSession.cli("install-plugin", AGENTS_PLUGIN)
         SaltcornSession.cli("install-plugin", MCP_SERVER_PLUGIN)
         cls.api_token = SaltcornSession.cli("modify-user", "-g", ADMIN_EMAIL)
+        cls.staff_api_token = SaltcornSession.cli("modify-user", "-g", "staff@foo.com")
         logger.info("API token: %s", cls.api_token)
         cls.sess = SaltcornSession(port=3001)
         cls._login(cls)
+        trigger_id = cls._create_agent_trigger(cls)
+        cls._configure_agent_trigger(cls, trigger_id)
 
     @classmethod
     def teardown_class(cls):
@@ -126,9 +129,6 @@ class TestMcpServer:
         assert "401" in all_messages, f"Expected 401, got: {exc}"
 
     def test_list_tools(self):
-        trigger_id = self._create_agent_trigger()
-        self._configure_agent_trigger(trigger_id)
-
         async def run():
             async with streamablehttp_client(
                 MCP_URL, headers={"Authorization": f"Bearer {self.__class__.api_token}"}
@@ -144,9 +144,6 @@ class TestMcpServer:
         asyncio.run(run())
 
     def test_call_tool(self):
-        trigger_id = self._create_agent_trigger()
-        self._configure_agent_trigger(trigger_id)
-
         async def run():
             async with streamablehttp_client(
                 MCP_URL, headers={"Authorization": f"Bearer {self.__class__.api_token}"}
@@ -165,3 +162,21 @@ class TestMcpServer:
         albums = json.loads(self.sess.content).get("success", [])
         logger.info("Albums in db: %s", [a["name"] for a in albums])
         assert len(albums) > 0, "No albums found after tool call"
+
+    def test_insufficient_role_cannot_see_tool(self):
+        """Staff (role_id=40) must not see tools from a trigger with min_role=1 (admin)."""
+        async def run():
+            async with streamablehttp_client(
+                MCP_URL, headers={"Authorization": f"Bearer {self.__class__.staff_api_token}"}
+            ) as (read, write, _):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+
+                    result = await session.list_tools()
+                    tool_names = [t.name for t in result.tools]
+                    logger.info("Tools visible to staff: %s", tool_names)
+                    assert "insert_album" not in tool_names, (
+                        f"insert_album should not be visible to staff, got: {tool_names}"
+                    )
+
+        asyncio.run(run())
