@@ -995,6 +995,7 @@ function removeLoadSpinner() {
       if (count === 0) spinner.remove();
       else spinner.attr("spinner-count", count);
     }
+    reset_spinners();
   }
 }
 
