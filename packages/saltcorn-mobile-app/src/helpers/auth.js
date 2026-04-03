@@ -26,22 +26,22 @@ async function loginRequest({ email, password, isSignup, isPublic }) {
         path: "/auth/login-with/jwt",
       }
     : isSignup
-      ? {
-          method: "POST",
-          path: "/auth/signup",
-          body: {
-            email,
-            password,
-          },
-        }
-      : {
-          method: "GET",
-          path: "/auth/login-with/jwt",
-          params: {
-            email,
-            password,
-          },
-        };
+    ? {
+        method: "POST",
+        path: "/auth/signup",
+        body: {
+          email,
+          password,
+        },
+      }
+    : {
+        method: "POST",
+        path: "/auth/login-with/jwt",
+        body: {
+          email,
+          password,
+        },
+      };
   const response = await apiCall(opts);
   return response.data;
 }

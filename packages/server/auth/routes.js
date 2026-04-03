@@ -288,7 +288,8 @@ const loginWithJwt = async (email, password, saltcornApp, res, req) => {
             iat: now.valueOf(),
             tenant: db.getTenantSchema(),
           },
-          jwt_secret
+          jwt_secret,
+          { expiresIn: "30d" }
         );
         if (!user.last_mobile_login) await user.updateLastMobileLogin(now);
         res.json(token);
@@ -313,7 +314,8 @@ const loginWithJwt = async (email, password, saltcornApp, res, req) => {
           iat: new Date().valueOf(),
           tenant: db.getTenantSchema(),
         },
-        jwt_secret
+        jwt_secret,
+        { expiresIn: "30d" }
       );
       res.json(token);
     }
@@ -1414,6 +1416,25 @@ router.get(
   })
 );
 
+/**
+ * @name post/login-with/jwt
+ * @function
+ * @memberof module:auth/routes~routesRouter
+ */
+router.post(
+  "/login-with/jwt",
+  error_catcher(async (req, res) => {
+    const { email, password } = req.body;
+    await loginWithJwt(
+      email,
+      password,
+      req.headers["x-saltcorn-app"],
+      res,
+      req
+    );
+  })
+);
+
 /*
   returns if 'req.user' is an authenticated user
  */
@@ -1519,7 +1540,10 @@ const loginCallback = (req, res, method) => async () => {
       const user = await User.findOne({ email: req.user.email });
       if (!user.last_mobile_login) await user.updateLastMobileLogin(now);
       res.redirect(
-        `mobileapp://auth/callback?token=${await generateTokenForUser(req.user, now)}&method=${encodeURIComponent(method)}`
+        `mobileapp://auth/callback?token=${await generateTokenForUser(
+          req.user,
+          now
+        )}&method=${encodeURIComponent(method)}`
       );
     } else res.redirect("/");
   }
