@@ -286,10 +286,10 @@ const loginWithJwt = async (email, password, saltcornApp, res, req) => {
             iss: "saltcorn@saltcorn",
             aud: "saltcorn-mobile-app",
             iat: now.valueOf(),
+            exp: Math.floor(now.valueOf() / 1000) + 30 * 24 * 3600,
             tenant: db.getTenantSchema(),
           },
-          jwt_secret,
-          { expiresIn: "30d" }
+          jwt_secret
         );
         if (!user.last_mobile_login) await user.updateLastMobileLogin(now);
         res.json(token);
@@ -314,8 +314,7 @@ const loginWithJwt = async (email, password, saltcornApp, res, req) => {
           iat: new Date().valueOf(),
           tenant: db.getTenantSchema(),
         },
-        jwt_secret,
-        { expiresIn: "30d" }
+        jwt_secret
       );
       res.json(token);
     }
@@ -1432,6 +1431,50 @@ router.post(
       res,
       req
     );
+  })
+);
+
+/**
+ * @name post/renew-jwt
+ * @function
+ * @memberof module:auth/routes~routesRouter
+ */
+router.post(
+  "/renew-jwt",
+  passport.authenticate("jwt", { session: false }),
+  error_catcher(async (req, res) => {
+    if (!req.user?.email) {
+      return res.status(401).json({ error: req.__("Not authenticated") });
+    }
+    const renewFn = async () => {
+      const user = await User.findOne({ email: req.user.email });
+      if (!user)
+        return res.status(401).json({ error: req.__("User not found") });
+      const now = new Date();
+      const pushEnabled = !!user._attributes?.notify_push;
+      const tokenUser = { ...user.session_object };
+      if (tokenUser.attributes) tokenUser.attributes.notify_push = pushEnabled;
+      else tokenUser._attributes = { notify_push: pushEnabled };
+      const token = jwt.sign(
+        {
+          sub: user.email,
+          user: tokenUser,
+          iss: "saltcorn@saltcorn",
+          aud: "saltcorn-mobile-app",
+          iat: now.valueOf(),
+          exp: Math.floor(now.valueOf() / 1000) + 30 * 24 * 3600,
+          tenant: db.getTenantSchema(),
+        },
+        db.connectObj.jwt_secret
+      );
+      res.json(token);
+    };
+    const saltcornApp = req.headers["x-saltcorn-app"];
+    if (saltcornApp && saltcornApp !== db.connectObj.default_schema) {
+      await db.runWithTenant(saltcornApp, renewFn);
+    } else {
+      await renewFn();
+    }
   })
 );
 
