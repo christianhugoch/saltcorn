@@ -1605,9 +1605,8 @@ const configTypes: ConfigTypes = {
     label: "Mobile app: allowed emit events",
     default: [],
     blurb:
-      "Authenticated mobile app users may emit these additional event types to the server " +
-      "via POST /api/emit-event. Custom events are always allowed. " +
-      "Built-in system events (Login, Error, Startup, etc.) are blocked unless listed here.",
+      "Only these event types may be emitted by authenticated mobile app users " +
+      "via POST /api/emit-event. Empty means no events can be emitted.",
     excludeFromMobile: true,
   },
   mobile_emit_public_events: {

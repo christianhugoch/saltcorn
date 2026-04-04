@@ -162,7 +162,7 @@ const logSettingsForm = async (req) => {
       type: "String",
       sublabel: req.__(
         "Comma-separated event names that authenticated mobile app users may emit. " +
-          "Custom events are always allowed."
+          "Empty means no events can be emitted."
       ),
     },
     {

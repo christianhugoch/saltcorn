@@ -756,7 +756,10 @@ describe("API action", () => {
 });
 
 describe("API emit", () => {
-  it("emits an event via POST with JWT", async () => {
+  it("emits an event via POST with JWT when configured", async () => {
+    await getState().setConfig("mobile_emit_allowed_events", [
+      "ReceiveMobileShareData",
+    ]);
     const app = await getApp({ disableCsrf: true });
     const token = await getAdminJwt();
     await request(app)
@@ -765,6 +768,7 @@ describe("API emit", () => {
       .send({ payload: { latitude: 20, longitude: 30 } })
       .expect(succeedJsonWith((success) => success === true));
     await sleep(200);
+    await getState().setConfig("mobile_emit_allowed_events", []);
   });
 
   it("denies an event without JWT", async () => {
@@ -799,38 +803,16 @@ describe("API emit-event access control", () => {
 
   // --- authenticated user ---
 
-  it("allows authenticated user to emit ReceiveMobileShareData", async () => {
+  it("blocks authenticated user from emitting any event by default", async () => {
     const app = await getApp({ disableCsrf: true });
-    await request(app)
-      .post("/api/emit-event/ReceiveMobileShareData")
-      .set("Authorization", `jwt ${adminJwt}`)
-      .send({ payload: {} })
-      .expect(succeedJsonWith((success) => success === true));
-  });
-
-  it("allows authenticated user to emit AppChange", async () => {
-    const app = await getApp({ disableCsrf: true });
-    await request(app)
-      .post("/api/emit-event/AppChange")
-      .set("Authorization", `jwt ${adminJwt}`)
-      .send({ payload: {} })
-      .expect(succeedJsonWith((success) => success === true));
-  });
-
-  it("blocks authenticated user from emitting system event Login", async () => {
-    const app = await getApp({ disableCsrf: true });
-    await request(app)
-      .post("/api/emit-event/Login")
-      .set("Authorization", `jwt ${adminJwt}`)
-      .send({ payload: {} })
-      .expect(
-        respondJsonWith(403, (resp) => resp.error === "Event type not allowed")
-      );
-  });
-
-  it("blocks authenticated user from emitting other system events", async () => {
-    const app = await getApp({ disableCsrf: true });
-    for (const eventName of ["Error", "Startup", "UserVerified"]) {
+    for (const eventName of [
+      "ReceiveMobileShareData",
+      "AppChange",
+      "Login",
+      "Error",
+      "Startup",
+      "UserVerified",
+    ]) {
       await request(app)
         .post(`/api/emit-event/${eventName}`)
         .set("Authorization", `jwt ${adminJwt}`)
@@ -844,14 +826,30 @@ describe("API emit-event access control", () => {
     }
   });
 
-  it("allows authenticated user to emit system event when in mobile_emit_allowed_events config", async () => {
-    await getState().setConfig("mobile_emit_allowed_events", ["Login"]);
+  it("allows authenticated user to emit event listed in mobile_emit_allowed_events config", async () => {
+    await getState().setConfig("mobile_emit_allowed_events", [
+      "ReceiveMobileShareData",
+    ]);
     const app = await getApp({ disableCsrf: true });
     await request(app)
-      .post("/api/emit-event/Login")
+      .post("/api/emit-event/ReceiveMobileShareData")
       .set("Authorization", `jwt ${adminJwt}`)
       .send({ payload: {} })
       .expect(succeedJsonWith((success) => success === true));
+  });
+
+  it("blocks authenticated user from emitting event not listed in mobile_emit_allowed_events config", async () => {
+    await getState().setConfig("mobile_emit_allowed_events", [
+      "ReceiveMobileShareData",
+    ]);
+    const app = await getApp({ disableCsrf: true });
+    await request(app)
+      .post("/api/emit-event/AppChange")
+      .set("Authorization", `jwt ${adminJwt}`)
+      .send({ payload: {} })
+      .expect(
+        respondJsonWith(403, (resp) => resp.error === "Event type not allowed")
+      );
   });
 
   // --- public user ---

@@ -569,8 +569,8 @@ router.get("/:tableName/count", async (req, res, next) => {
  * Emit Event using POST
  * This is used from the mobile app to send an event to the server.
  *
- * Authenticated users may emit custom/plugin events plus any events listed in
- * the `mobile_emit_allowed_events` config.
+ * Authenticated users may only emit events listed in the
+ * `mobile_emit_allowed_events` config.
  * Public users (role_id=100, no id) may only emit events listed in the
  * `mobile_emit_public_events` config (default: empty — disabled).
  */
@@ -599,20 +599,12 @@ router.post(
             return res.status(401).json({ error: req.__("Not authorized") });
           }
         } else {
-          // authenticated user — allow custom/plugin events + configured extras
-          const defaultAllowed = [
-            "ReceiveMobileShareData",
-            "AppChange",
-            ...Object.keys(state.eventTypes),
-          ];
+          // authenticated user — only allowed if explicitly configured
           const configAllowed = state.getConfig(
             "mobile_emit_allowed_events",
             []
           );
-          if (
-            !defaultAllowed.includes(eventname) &&
-            !configAllowed.includes(eventname)
-          ) {
+          if (!configAllowed.includes(eventname)) {
             state.log(
               3,
               `API POST emit-event: event type '${eventname}' not allowed`
