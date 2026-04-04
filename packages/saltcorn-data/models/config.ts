@@ -1606,7 +1606,7 @@ const configTypes: ConfigTypes = {
     default: [],
     blurb:
       "Authenticated mobile app users may emit these additional event types to the server " +
-      "via POST /api/emit-event. Custom events registered by plugins are always allowed. " +
+      "via POST /api/emit-event. Custom events are always allowed. " +
       "Built-in system events (Login, Error, Startup, etc.) are blocked unless listed here.",
     excludeFromMobile: true,
   },
