@@ -599,12 +599,15 @@ router.post(
             return res.status(401).json({ error: req.__("Not authorized") });
           }
         } else {
-          // authenticated user — only allowed if explicitly configured
+          // authenticated user — ReceiveMobileShareData always allowed, rest requires config
           const configAllowed = state.getConfig(
             "mobile_emit_allowed_events",
             []
           );
-          if (!configAllowed.includes(eventname)) {
+          if (
+            eventname !== "ReceiveMobileShareData" &&
+            !configAllowed.includes(eventname)
+          ) {
             state.log(
               3,
               `API POST emit-event: event type '${eventname}' not allowed`
