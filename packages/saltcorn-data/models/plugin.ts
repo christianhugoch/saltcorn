@@ -331,7 +331,10 @@ class Plugin implements AbstractPlugin {
   // ── plugin loading / installation ──────────────────────────────────────
 
   /**
-   * Return the cached engine infos or fetch them from npm and update the cache
+   * Return cached engine constraint metadata for a plugin, fetching from npm if needed
+   * @param plugin - plugin whose npm location is queried
+   * @param forceFetch - bypass the cache and re-fetch from npm
+   * @returns map of `{ version: { engines?: { saltcorn: string } } }`
    */
   static async getEngineInfos(
     plugin: Plugin,
@@ -363,6 +366,8 @@ class Plugin implements AbstractPlugin {
 
   /**
    * Check the saltcorn engine property and change the plugin version if necessary
+   * @param plugin - plugin to validate; `plugin.version` may be mutated
+   * @param forceFetch - bypass the engine-info cache when checking versions
    */
   static async ensurePluginSupport(
     plugin: Plugin,
@@ -405,6 +410,11 @@ class Plugin implements AbstractPlugin {
 
   /**
    * Load one plugin and register in state (without DB save)
+   * @param plugin - plugin to load
+   * @param force - remove the install directory and retry on registration failure
+   * @param forceFetch - bypass the engine-info cache when resolving versions
+   * @param reloadModule - force a fresh module load even if already cached
+   * @returns PluginInstaller result (`{ plugin_module, location, … }`)
    */
   static async loadPlugin(
     plugin: Plugin,
@@ -485,7 +495,10 @@ class Plugin implements AbstractPlugin {
   }
 
   /**
-   * Install plugin (without DB save or state registration)
+   * Install plugin without registering in state or saving to database
+   * @param plugin - plugin to install
+   * @param force - force reinstall even if already present
+   * @returns PluginInstaller result (`{ plugin_module, location, version, … }`)
    */
   static async requirePlugin(plugin: Plugin, force?: boolean): Promise<any> {
     const { getState, getRootState } = require("../db/state");
@@ -507,6 +520,8 @@ class Plugin implements AbstractPlugin {
 
   /**
    * Load all plugins from the database into state
+   * @param force - passed through to {@link loadPlugin} for each plugin
+   * @param reloadModule - force fresh module loads for each plugin
    */
   static async loadAllPlugins(
     force?: boolean,
@@ -529,6 +544,13 @@ class Plugin implements AbstractPlugin {
 
   /**
    * Load plugin and its dependencies and save into local installation
+   * @param plugin - plugin to install
+   * @param force - force reinstall; retries after removing the install dir on failure
+   * @param noSignalOrDB - skip database upsert and processSend signal (e.g. during restore)
+   * @param __ - i18n translation function for user-facing messages
+   * @param allowUnsafeOnTenantsWithoutConfigSetting - allow unsafe plugins on tenants without the global config flag
+   * @param overwriteDependencies - substitute local paths for dependencies; testing only
+   * @returns warning/info messages collected during install, or `undefined` if skipped
    */
   static async loadAndSaveNewPlugin(
     plugin: Plugin,
@@ -676,6 +698,11 @@ class Plugin implements AbstractPlugin {
     return loadMsgs;
   }
 
+  /**
+   * When the database has another plugin version, don't override the pre-installed module
+   * @param plugin - plugin whose version may be mutated
+   * @param airgapedStore - content of `pre_installed_module_infos` config
+   */
   private static ensureAirgapedVersion(
     plugin: Plugin,
     airgapedStore: any[]
@@ -698,6 +725,9 @@ class Plugin implements AbstractPlugin {
     }
   }
 
+  /**
+   * Copy auth methods with `shareWithTenants: true` from root state into current tenant state
+   */
   private static reloadAuthFromRoot(): void {
     const { getState, getRootState } = require("../db/state");
     if (isRoot()) return;

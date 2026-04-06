@@ -1,8 +1,6 @@
-/**
- * @deprecated Import directly from @saltcorn/data/models/plugin (Plugin static methods)
- */
 const Plugin = require("@saltcorn/data/models/plugin");
 
+/** @deprecated Import directly from @saltcorn/data/models/plugin (Plugin static methods) */
 module.exports = {
   loadAndSaveNewPlugin: Plugin.loadAndSaveNewPlugin,
   loadAllPlugins: Plugin.loadAllPlugins,
