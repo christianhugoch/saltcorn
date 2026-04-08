@@ -742,15 +742,13 @@ function get_expression_function(
  * @param {object} row - The current row data, whose fields are destructured as variables.
  * @param {object} user - The current user object, available as `user` in the expression.
  * @param {string} errorLocation - Optional label included in error messages to identify where the expression was used.
- * @param {object} old_row - The previous row data before an update, available as `old_row` in the expression.
  * @returns {any} - The result of evaluating the expression.
  */
 function eval_expression(
   expression: string,
   row?: any,
   user?: any,
-  errorLocation?: string,
-  old_row?: any
+  errorLocation?: string
 ): any {
   try {
     const use_row = row || {};
@@ -768,7 +766,6 @@ function eval_expression(
       ...getState().eval_context,
       row: use_row,
       user,
-      old_row,
     });
   } catch (e: any) {
     e.message = `In evaluating the expression ${expression}${

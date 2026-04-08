@@ -21,7 +21,7 @@ export interface AbstractTrigger {
 
   runWithoutRow(runargs: any): Promise<boolean>;
   getTags(): Promise<Array<AbstractTag>>;
-  haltOnOnlyIf: (row: Row, user?: Row, old_row?: Row) => boolean;
+  haltOnOnlyIf: (row: Row, user?: Row) => boolean;
 }
 
 export type TriggerCfg = {

@@ -379,8 +379,7 @@ class Trigger implements AbstractTrigger {
         if (
           trigger.haltOnOnlyIf?.(
             { ...row, ...extraArgs },
-            user || extraArgs?.user,
-            extraArgs?.old_row
+            user || extraArgs?.user
           )
         ) {
           state.log(
@@ -426,7 +425,12 @@ class Trigger implements AbstractTrigger {
       : undefined;
 
     // Halt if _only_if condition evaluates to falsy
-    if (this.haltOnOnlyIf(runargs.row, runargs.user, runargs.old_row)) {
+    if (
+      this.haltOnOnlyIf(
+        { ...runargs.row, old_row: runargs.old_row },
+        runargs.user
+      )
+    ) {
       state.log(4, `Trigger "${this.name}" skipped due to _only_if condition.`);
       return;
     }
@@ -532,18 +536,16 @@ class Trigger implements AbstractTrigger {
    * Check if the trigger should halt based on the _only_if condition.
    * @param row - The current (new) row data, potentially merged with extra trigger arguments.
    * @param user - The user data.
-   * @param old_row - The previous row data before an update, made available as `old_row` in the expression.
    * @returns {boolean} - Returns true if the _only_if condition exists and evaluates to falsy.
    */
-  haltOnOnlyIf(row: Row, user?: Row, old_row?: Row): boolean {
+  haltOnOnlyIf(row: Row, user?: Row): boolean {
     if (this.configuration?._only_if) {
       const { eval_expression } = require("./expression");
       return !eval_expression(
         this.configuration._only_if,
         row || {},
         user || {},
-        "Trigger _only_if condition",
-        old_row
+        "Trigger _only_if condition"
       );
     }
     return false;

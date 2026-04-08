@@ -1019,12 +1019,12 @@ describe("_only_if with old_row on Update trigger", () => {
       name: "onlyIfOldRow",
       configuration: {
         number: 99,
-        _only_if: "old_row.name !== row.name",
+        _only_if: "row.old_row.name !== row.name",
       },
     });
   });
 
-  it("should fire trigger when name changes (old_row.name !== row.name)", async () => {
+  it("should fire trigger when name changes (row.old_row.name !== row.name)", async () => {
     resetActionCounter();
     const table = Table.findOne({ name: "patients" });
     assertIsSet(table);
