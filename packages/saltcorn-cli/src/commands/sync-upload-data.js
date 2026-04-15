@@ -88,7 +88,7 @@ class SyncHelper {
       getState().log(2, `Unable to sync: ${error.message}`);
       await this.writeErrorFile(error.message);
       if (this.inTransaction) await db.rollback();
-    } 
+    }
     return returnCode;
   }
 
@@ -116,14 +116,14 @@ class SyncHelper {
         if (ids?.length > 0) {
           for (const [from, to] of Object.entries(targetTrans)) {
             await db.query(
-              `update ${schema}"${db.sqlsanitize(tblName)}" set "${db.sqlsanitize(
-                fk.name
-              )}" = ${to}
+              `update ${schema}"${db.sqlsanitize(
+                tblName
+              )}" set "${db.sqlsanitize(fk.name)}" = ${to}
                 where "${db.sqlsanitize(
                   fk.name
                 )}" = ${from} and "${db.sqlsanitize(pkName)}" in (${ids.join(
-                  ","
-                )})`
+                ","
+              )})`
             );
           }
         }
@@ -146,8 +146,21 @@ class SyncHelper {
           );
           const translations = {};
           const uniqueConflicts = [];
+          const pkField = table
+            .getFields()
+            .find((f) => f.name === pkName && !f.is_fkey);
+          const pkHasClientDefault =
+            typeof pkField?.type?.primaryKey?.default_js === "function";
           for (const insert of vals.inserts || []) {
-            const row = pickFields(table, pkName, insert);
+            // Keep the client-generated PK only for types that explicitly provide
+            // a client-side default (e.g. UUID). For integer PKs the local ID may
+            // collide with existing server IDs and must go through translation.
+            const row = pickFields(
+              table,
+              pkName,
+              insert,
+              pkHasClientDefault && insert[pkName] != null
+            );
             const conflictRow = await checkConstraints(table, row);
             if (!conflictRow) {
               const newId = await table.insertRow(
@@ -168,7 +181,9 @@ class SyncHelper {
           this.allTranslations[tblName] = translations;
           this.allUniqueConflicts[tblName] = uniqueConflicts;
           await db.query(
-            `alter table ${schema}"${db.sqlsanitize(tblName)}" enable trigger all`
+            `alter table ${schema}"${db.sqlsanitize(
+              tblName
+            )}" enable trigger all`
           );
         }
       } catch (error) {
@@ -328,7 +343,9 @@ class SyncUploadData extends Command {
   async run() {
     const { flags } = await this.parse(SyncUploadData);
     if (db.is_it_multi_tenant() && flags.tenantAppName) {
-      await init_multi_tenant(Plugin.loadAllPlugins, true, [flags.tenantAppName]);
+      await init_multi_tenant(Plugin.loadAllPlugins, true, [
+        flags.tenantAppName,
+      ]);
     }
     const fn = async () => {
       await Plugin.loadAllPlugins();
