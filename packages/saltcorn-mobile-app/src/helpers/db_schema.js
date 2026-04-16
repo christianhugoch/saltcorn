@@ -206,12 +206,6 @@ export async function updateDb(tablesJSON) {
   });
 }
 
-export async function getTableIds(tableNames) {
-  return (await saltcorn.data.models.Table.find())
-    .filter((table) => tableNames.indexOf(table.name) > -1)
-    .map((table) => table.id);
-}
-
 export async function createJwtTable() {
   await saltcorn.data.db.query(`CREATE TABLE IF NOT EXISTS ${jwtTableName} (
     jwt VARCHAR(500)
