@@ -1012,7 +1012,7 @@ class View implements AbstractView {
     const { getState } = require("../db/state");
     const mobileConfig = getState().mobileConfig;
     if (mobileConfig?.isOfflineMode) return false;
-    else return !!(this.viewtemplateObj?.tableless || !this.table_id);
+    return true;
   }
 
   /**
