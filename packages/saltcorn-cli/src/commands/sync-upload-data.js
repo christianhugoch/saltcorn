@@ -115,15 +115,17 @@ class SyncHelper {
         const ids = rowIds(fk, targetTrans, table.name, pkName, changes);
         if (ids?.length > 0) {
           for (const [from, to] of Object.entries(targetTrans)) {
+            const idParams = ids.map((_, i) => `$${i + 3}`);
             await db.query(
               `update ${schema}"${db.sqlsanitize(
                 tblName
-              )}" set "${db.sqlsanitize(fk.name)}" = ${to}
+              )}" set "${db.sqlsanitize(fk.name)}" = $1
                 where "${db.sqlsanitize(
                   fk.name
-                )}" = ${from} and "${db.sqlsanitize(pkName)}" in (${ids.join(
+                )}" = $2 and "${db.sqlsanitize(pkName)}" in (${idParams.join(
                 ","
-              )})`
+              )})`,
+              [to, from, ...ids]
             );
           }
         }
