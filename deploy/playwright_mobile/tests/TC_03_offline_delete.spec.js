@@ -130,4 +130,79 @@ test.describe("Offline Delete", () => {
       throw error;
     }
   });
+
+  test("toggle online mode", async () => {
+    try {
+      const iframe = page.frameLocator("#content-iframe");
+      const networkLink = iframe.locator("a", { hasText: "Network" });
+      await expect(networkLink).toBeVisible();
+      await networkLink.click();
+      await page.waitForTimeout(3000);
+
+      const newIframe = page.frameLocator("#content-iframe");
+      await newIframe
+        .locator(".form-check.form-switch input[type='checkbox']")
+        .click();
+      await page.waitForTimeout(3000);
+
+      const toast = page
+        .frameLocator("#content-iframe")
+        .locator(".toast .toast-body");
+      await expect(toast).toBeVisible();
+      await expect(toast).toHaveText(/You are online again./i);
+    } catch (error) {
+      await dumpHTML(page);
+      throw error;
+    }
+  });
+
+  test("sync offline data", async () => {
+    try {
+      const iframe = page.frameLocator("#content-iframe");
+      const networkLink = iframe.locator("a", { hasText: "Network" });
+      await expect(networkLink).toBeVisible();
+      await networkLink.click();
+      await page.waitForTimeout(3000);
+
+      const newIframe = page.frameLocator("#content-iframe");
+      const syncButton = newIframe.locator('button[onClick="callSync()"]');
+      await expect(syncButton).toBeVisible();
+      await syncButton.click();
+      await page.waitForTimeout(3000);
+
+      const toast = page
+        .frameLocator("#content-iframe")
+        .locator(".toast .toast-body");
+      await expect(toast).toBeVisible();
+      await expect(toast).toHaveText(/Synchronized your offline data./i);
+    } catch (error) {
+      await dumpHTML(page);
+      throw error;
+    }
+  });
+
+  test("check guitar_list is empty after sync", async () => {
+    try {
+      const iframe = page.frameLocator("#content-iframe");
+      await iframe.locator("a.navbar-brand").click();
+      await page.waitForTimeout(3000);
+
+      const newIframe = page.frameLocator("#content-iframe");
+      await expect(
+        newIframe.getByText("guitar_list", { exact: true })
+      ).toBeVisible();
+      await page
+        .frameLocator("#content-iframe")
+        .getByText("guitar_list", { exact: true })
+        .click();
+      await page.waitForTimeout(3000);
+
+      await expect(
+        page.frameLocator("#content-iframe").locator("table tbody tr")
+      ).toHaveCount(0);
+    } catch (error) {
+      await dumpHTML(page);
+      throw error;
+    }
+  });
 });
