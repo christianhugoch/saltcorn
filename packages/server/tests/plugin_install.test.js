@@ -87,6 +87,40 @@ describe("Tenant cannot install unsafe plugins", () => {
         expect(dbPlugin).toBe(null);
       });
     });
+    it("cannot install git plugins on tenant when tenants_install_git is false", async () => {
+      await db.runWithTenant("test101", async () => {
+        const loadAndSaveNewPlugin = Plugin.loadAndSaveNewPlugin;
+
+        await install_pack(
+          plugin_pack({
+            name: "some-git-plugin",
+            source: "git",
+            location: "https://github.com/example/some-git-plugin",
+          }),
+          "Some git plugin",
+          loadAndSaveNewPlugin
+        );
+        const dbPlugin = await Plugin.findOne({ name: "some-git-plugin" });
+        expect(dbPlugin).toBe(null);
+      });
+    });
+    it("cannot install github plugins on tenant when tenants_install_git is false", async () => {
+      await db.runWithTenant("test101", async () => {
+        const loadAndSaveNewPlugin = Plugin.loadAndSaveNewPlugin;
+
+        await install_pack(
+          plugin_pack({
+            name: "some-github-plugin",
+            source: "github",
+            location: "example/some-github-plugin",
+          }),
+          "Some github plugin",
+          loadAndSaveNewPlugin
+        );
+        const dbPlugin = await Plugin.findOne({ name: "some-github-plugin" });
+        expect(dbPlugin).toBe(null);
+      });
+    });
     it("can install unsafe plugins on tenant when permitted", async () => {
       await getState().setConfig("tenants_unsafe_plugins", true);
       await db.runWithTenant("test101", async () => {
