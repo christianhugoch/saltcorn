@@ -428,6 +428,14 @@ class Plugin implements AbstractPlugin {
   ): Promise<any> {
     const { getState, getRootState } = require("../db/state");
     const PluginInstaller = require("@saltcorn/plugins-loader/plugin_installer");
+    if (
+      !isRoot() &&
+      !getRootState().getConfig("tenants_install_git", false) &&
+      (plugin.source === "git" || plugin.source === "github")
+    ) {
+      console.error("\nWARNING: Skipping git/github plugin ", plugin.name);
+      return;
+    }
     if (plugin.source === "npm" && !Plugin.is_fixed_plugin(plugin.location)) {
       try {
         await Plugin.ensurePluginSupport(plugin, forceFetch);
