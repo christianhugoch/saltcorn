@@ -121,6 +121,30 @@ describe("Tenant cannot install unsafe plugins", () => {
         expect(dbPlugin).toBe(null);
       });
     });
+    it("loadPlugin skips git plugin on tenant when tenants_install_git is false", async () => {
+      await db.runWithTenant("test101", async () => {
+        const result = await Plugin.loadPlugin(
+          new Plugin({
+            name: "some-git-plugin",
+            source: "git",
+            location: "https://github.com/example/some-git-plugin",
+          })
+        );
+        expect(result).toBeUndefined();
+      });
+    });
+    it("loadPlugin skips github plugin on tenant when tenants_install_git is false", async () => {
+      await db.runWithTenant("test101", async () => {
+        const result = await Plugin.loadPlugin(
+          new Plugin({
+            name: "some-github-plugin",
+            source: "github",
+            location: "example/some-github-plugin",
+          })
+        );
+        expect(result).toBeUndefined();
+      });
+    });
     it("can install unsafe plugins on tenant when permitted", async () => {
       await getState().setConfig("tenants_unsafe_plugins", true);
       await db.runWithTenant("test101", async () => {
