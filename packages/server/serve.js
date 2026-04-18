@@ -961,9 +961,8 @@ const setupSocket = (subdomainOffset, pruneSessionInterval, ...servers) => {
           const enabled = getState().getConfig("enable_dynamic_updates", true);
           if (!enabled) throw new Error("Dynamic updates are not enabled");
           const user = socket.request.user;
-          if (!user) throw new Error("Not authorized");
           socket.join(`_${tenant}_dynamic_update_room`);
-          socket.join(`_${tenant}:${user.id}_dynamic_update_room`);
+          if (user) socket.join(`_${tenant}:${user.id}_dynamic_update_room`);
           const socketIds = await getState().getConfig(
             "joined_dynamic_update_socket_ids",
             []

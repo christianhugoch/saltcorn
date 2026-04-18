@@ -36,7 +36,12 @@ class DynamicUpdatesClient:
 
   def connect(self):
     auth_headers = 'connect.sid=' + self.session.sessionID() + '; loggedin=true'
-    self.sio.connect('http://localhost:3001', 
+    self.sio.connect('http://localhost:3001',
+      transports= ["websocket"], headers={'cookie': auth_headers})
+
+  def connect_as_public(self):
+    auth_headers = 'connect.sid=' + self.session.sessionID()
+    self.sio.connect('http://localhost:3001',
       transports= ["websocket"], headers={'cookie': auth_headers})
 
   def join_dynamic_updates_room(self):

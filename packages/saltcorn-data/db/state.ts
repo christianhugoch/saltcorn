@@ -1227,11 +1227,11 @@ class State {
               );
               return;
             }
-            const safeIds = Array.isArray(userIds)
+            const safeIds: number[] | undefined = Array.isArray(userIds)
               ? userIds
               : userIds
                 ? [userIds]
-                : [];
+                : undefined;
             this.emitDynamicUpdate(db.getTenantSchema(), data, safeIds);
           },
           Buffer: isNode() ? Buffer : require("buffer"),
@@ -1468,7 +1468,7 @@ class State {
       this.processSend({
         dynamic_update: data,
         tenant: ten,
-        userIds: userIds || [],
+        userIds: userIds,
       });
     }
   }

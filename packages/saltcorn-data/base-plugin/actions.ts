@@ -110,13 +110,11 @@ const emit_to_client =
       state.log(5, "emit_to_client called, but dynamic updates are disabled");
       return;
     }
-    const safeIds = Array.isArray(userIds)
+    const safeIds: number[] | undefined = Array.isArray(userIds)
       ? userIds
       : userIds
         ? [userIds]
-        : user?.id
-          ? [user.id]
-          : [];
+        : undefined;
     state.emitDynamicUpdate(db.getTenantSchema(), data, safeIds);
   };
 

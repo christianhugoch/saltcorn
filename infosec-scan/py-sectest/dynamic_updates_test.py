@@ -70,6 +70,41 @@ class Test:
     time.sleep(1)
     assert len(client.updates) == 3
 
+  def test_connect_public(self):
+    client = DynamicUpdatesClient()
+    client.connect_as_public()
+    assert client.sio.connected
+    client.sio.disconnect()
+
+  def test_join_dynamic_updates_room_public(self):
+    client = DynamicUpdatesClient()
+    client.connect_as_public()
+    client.join_dynamic_updates_room()
+    time.sleep(1)
+
+  def test_run_trigger_public(self):
+    public_client = DynamicUpdatesClient()
+    public_client.connect_as_public()
+    public_client.join_dynamic_updates_room()
+    time.sleep(0.5)  # wait for room join to complete
+
+    # public session can't call trigger API — use a logged-in client to fire triggers
+    admin_client = DynamicUpdatesClient()
+    admin_client.login(email=adminEmail, password=adminPassword)
+
+    admin_client.run_trigger("emit_to_admin")
+    time.sleep(1)
+    assert len(public_client.updates) == 0
+    admin_client.run_trigger("emit_to_staff")
+    time.sleep(1)
+    assert len(public_client.updates) == 0
+    admin_client.run_trigger("emit_to_admin_and_staff")
+    time.sleep(1)
+    assert len(public_client.updates) == 0
+    admin_client.run_trigger("emit_tenant_wide")
+    time.sleep(1)
+    assert len(public_client.updates) == 1
+
   def test_run_trigger_user(self):
     client = DynamicUpdatesClient()
     client.login(email=userEmail, password=userPassword)
