@@ -101,9 +101,31 @@ class Test:
     admin_client.run_trigger("emit_to_admin_and_staff")
     time.sleep(1)
     assert len(public_client.updates) == 0
-    admin_client.run_trigger("emit_tenant_wide")
+    admin_client.run_trigger("emit_to_public")
     time.sleep(1)
     assert len(public_client.updates) == 1
+
+  def test_broadcast_reaches_multiple_public_clients(self):
+    # Both public clients join with distinct page_load_tags; broadcast reaches both
+    client_a = DynamicUpdatesClient()
+    client_a.connect_as_public()
+    client_a.join_dynamic_updates_room()
+
+    client_b = DynamicUpdatesClient()
+    client_b.connect_as_public()
+    client_b.join_dynamic_updates_room()
+    time.sleep(0.5)
+
+    assert client_a.page_load_tag != client_b.page_load_tag
+
+    admin_client = DynamicUpdatesClient()
+    admin_client.login(email=adminEmail, password=adminPassword)
+    admin_client.run_trigger("emit_to_public")
+    time.sleep(1)
+    assert len(client_a.updates) == 1
+    assert len(client_b.updates) == 1
+    client_a.sio.disconnect()
+    client_b.sio.disconnect()
 
   def test_run_trigger_user(self):
     client = DynamicUpdatesClient()
