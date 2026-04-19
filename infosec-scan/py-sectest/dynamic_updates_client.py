@@ -49,5 +49,6 @@ class DynamicUpdatesClient:
   def join_dynamic_updates_room(self):
     self.sio.emit("join_dynamic_update_room", {"page_load_tag": self.page_load_tag})
 
-  def run_trigger(self, name):
-    self.session.apiPost(f'/api/action/{name}', {})
+  def run_trigger(self, name, page_load_tag=None):
+    headers = {'page-load-tag': page_load_tag} if page_load_tag else {}
+    self.session.apiPost(f'/api/action/{name}', {}, extra_headers=headers)

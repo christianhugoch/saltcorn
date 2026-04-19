@@ -127,6 +127,38 @@ class Test:
     client_a.sio.disconnect()
     client_b.sio.disconnect()
 
+  def test_public_clients_receive_page_load_tag_in_emit(self):
+    # Server broadcasts to all public clients; each client receives the page_load_tag
+    # that was sent with the triggering request so client-side filtering can work.
+    client_a = DynamicUpdatesClient()
+    client_a.connect_as_public()
+    client_a.join_dynamic_updates_room()
+
+    client_b = DynamicUpdatesClient()
+    client_b.connect_as_public()
+    client_b.join_dynamic_updates_room()
+    time.sleep(0.5)
+
+    assert client_a.page_load_tag != client_b.page_load_tag
+
+    admin_client = DynamicUpdatesClient()
+    admin_client.login(email=adminEmail, password=adminPassword)
+    # Fire trigger tagged with client_a's page_load_tag
+    admin_client.run_trigger("emit_to_public", page_load_tag=client_a.page_load_tag)
+    time.sleep(1)
+
+    # Both clients receive the emit (server does not filter by page_load_tag)
+    assert len(client_a.updates) == 1
+    assert len(client_b.updates) == 1
+
+    # The emitted data carries the page_load_tag so each client can filter client-side
+    received_tag = client_a.updates[0].get("page_load_tag")
+    assert received_tag == client_a.page_load_tag
+    assert received_tag != client_b.page_load_tag
+
+    client_a.sio.disconnect()
+    client_b.sio.disconnect()
+
   def test_run_trigger_user(self):
     client = DynamicUpdatesClient()
     client.login(email=userEmail, password=userPassword)

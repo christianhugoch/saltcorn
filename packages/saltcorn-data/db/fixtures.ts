@@ -2622,7 +2622,7 @@ export = async (): Promise<void> => {
     run_where: "Server",
     when_trigger: "API call",
     configuration: {
-      code: `emit_to_client({notify: "hello public"}, null);`,
+      code: `emit_to_client({notify: "hello public", page_load_tag}, null);`,
     },
     min_role: undefined,
   } as any);
