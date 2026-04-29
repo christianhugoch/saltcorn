@@ -302,6 +302,7 @@ const workerDispatchMsg = ({ tenant, ...msg }) => {
       tenant || "public",
       msg.real_time_collab_event.type,
       msg.real_time_collab_event.data,
+      msg.real_time_collab_event.viewname,
       true
     );
   }
@@ -845,24 +846,35 @@ const setupSocket = (subdomainOffset, pruneSessionInterval, ...servers) => {
   });
 
   // Real-time collaboration emitter (tied to views)
-  getState().setCollabEmitter((tenant, type, data) => {
-    io.of("/").to(`_${tenant}_collab_room_`).emit(type, data);
+  getState().setCollabEmitter((tenant, type, data, viewname) => {
+    io.of("/").to(`_${tenant}_collab_room_${viewname}_`).emit(type, data);
   });
 
   // dynamic updates emitter (for run_js_actions)
   getState().setDynamicUpdateEmitter((tenant, data, userIds) => {
     if (userIds === null) {
       // explicit public-only; data may carry page_load_tag for client-side filtering
-      io.of("/").to(`_${tenant}_public_dynamic_update_room`).emit("dynamic_update", data);
-    } else if (userIds) {
+      io.of("/")
+        .to(`_${tenant}_public_dynamic_update_room`)
+        .emit("dynamic_update", data);
+    } else if (Array.isArray(userIds)) {
       for (const userId of userIds) {
         io.of("/")
           .to(`_${tenant}:${userId}_dynamic_update_room`)
           .emit("dynamic_update", data);
       }
+    } else if (userIds === undefined) {
+      // broadcast to all authenticated users in this tenant
+      io.of("/")
+        .to(`_${tenant}_dynamic_update_room`)
+        .emit("dynamic_update", data);
     } else {
-      // undefined: broadcast to authenticated users only
-      io.of("/").to(`_${tenant}_dynamic_update_room`).emit("dynamic_update", data);
+      getState().log(
+        1,
+        `setDynamicUpdateEmitter: unexpected userIds value: ${JSON.stringify(
+          userIds
+        )}`
+      );
     }
   });
 
@@ -929,9 +941,9 @@ const setupSocket = (subdomainOffset, pruneSessionInterval, ...servers) => {
           const role_id = user ? user.role_id : 100;
           if (view.min_role < role_id)
             throw new Error("Not authorized to join collaboration room");
-          const roomName = `_${tenant}_collab_room_`;
+          const roomName = `_${tenant}_collab_room_${viewname}_`;
           if (!socket.rooms.has(roomName)) {
-            socket.join(`_${tenant}_collab_room_`);
+            socket.join(roomName);
             if (typeof callback === "function") callback({ status: "ok" });
             const socketIds = await getState().getConfig(
               "joined_real_time_socket_ids",
@@ -964,8 +976,8 @@ const setupSocket = (subdomainOffset, pruneSessionInterval, ...servers) => {
           if (!enabled) throw new Error("Dynamic updates are not enabled");
           const user = socket.request.user;
           if (user) {
-            socket.join(`_${tenant}_dynamic_update_room`);
             socket.join(`_${tenant}:${user.id}_dynamic_update_room`);
+            socket.join(`_${tenant}_dynamic_update_room`);
           } else {
             socket.join(`_${tenant}_public_dynamic_update_room`);
           }

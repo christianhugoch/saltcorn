@@ -1038,7 +1038,12 @@ class View implements AbstractView {
     const { getState } = require("../db/state");
     const state = getState();
     const withViewName = this.getRealTimeEventName(eventType);
-    state.emitCollabMessage(db.getTenantSchema(), withViewName, data);
+    state.emitCollabMessage(
+      db.getTenantSchema(),
+      withViewName,
+      data,
+      this.name
+    );
   }
 
   /**

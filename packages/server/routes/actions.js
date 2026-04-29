@@ -2435,7 +2435,7 @@ const workflowRunPromiseHandler = (promise, run, req) => {
         ...retDirs,
         page_load_tag: req.headers["page-load-tag"],
       };
-      const userIds = req.user ? undefined : null;
+      const userIds = req.user ? [req.user.id] : null;
       getState().emitDynamicUpdate(db.getTenantSchema(), emitData, userIds);
       if (
         !emitData.resume_workflow &&
@@ -2451,7 +2451,7 @@ const workflowRunPromiseHandler = (promise, run, req) => {
       getState().emitDynamicUpdate(db.getTenantSchema(), {
         error: e.message,
         page_load_tag: req.headers["page-load-tag"],
-      }, req.user ? undefined : null);
+      }, req.user ? [req.user.id] : null);
     });
 };
 

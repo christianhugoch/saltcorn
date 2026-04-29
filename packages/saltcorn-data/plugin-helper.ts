@@ -3337,7 +3337,7 @@ const run_action_column = async ({
       eval_js: "reset_spinners()",
       page_load_tag: req.headers["page-load-tag"],
     };
-    const userIds = req.user ? undefined : null;
+    const userIds = req.user ? [req.user.id] : null;
     state.emitDynamicUpdate(db.getTenantSchema(), reset_msg, userIds);
   };
   const successAsyncHandler = (data: GenObj) => {
@@ -3346,7 +3346,7 @@ const run_action_column = async ({
     const emitData = { ...data };
     if (req.headers["page-load-tag"])
       emitData.page_load_tag = req.headers["page-load-tag"];
-    const userIds = req.user ? undefined : null;
+    const userIds = req.user ? [req.user.id] : null;
     state.emitDynamicUpdate(db.getTenantSchema(), emitData, userIds);
     if (
       !emitData.resume_workflow &&
@@ -3361,7 +3361,7 @@ const run_action_column = async ({
       state.emitDynamicUpdate(db.getTenantSchema(), {
         error: err.message || err,
         page_load_tag: req.headers["page-load-tag"],
-      }, req.user ? undefined : null);
+      }, req.user ? [req.user.id] : null);
     }
     reset_spinner(state);
   };
