@@ -267,7 +267,7 @@ const triggerForm = async (req, trigger) => {
   const hasChannel = Object.entries(getState().eventTypes)
     .filter(([k, v]) => v.hasChannel)
     .map(([k, v]) => k);
-
+  const actionExplainers = Trigger.action_explainers();
   const allActions = Trigger.action_options({
     notRequireRow: false,
     workflow: true,
@@ -378,6 +378,7 @@ const triggerForm = async (req, trigger) => {
         attributes: {
           options: actionsNotRequiringRow,
           onChange: "$('select[name=action]').val(event.target.value)",
+          explainers: actionExplainers,
         },
         showIf: {
           when_trigger: "Never",
@@ -394,6 +395,7 @@ const triggerForm = async (req, trigger) => {
         attributes: {
           options: allActions,
           onChange: "$('select[name=action]').val(event.target.value)",
+          explainers: actionExplainers,
         },
         showIf: {
           when_trigger: "Never",
@@ -1201,6 +1203,12 @@ router.get(
       ? Table.findOne({ id: trigger.table_id })
       : null;
 
+    const edit_redirect =
+      req.query.on_done_redirect &&
+      is_relative_url("/" + req.query.on_done_redirect)
+        ? `?on_done_redirect=${req.query.on_done_redirect}`
+        : "";
+
     const subtitle =
       span(
         { class: "ms-2" },
@@ -1210,7 +1218,7 @@ router.get(
         table ? ` on ` + a({ href: `/table/${table.name}` }, table.name) : ""
       ) +
       a(
-        { href: `/actions/edit/${id}`, class: "ms-2" },
+        { href: `/actions/edit/${id}${edit_redirect}`, class: "ms-2" },
         req.__("Edit"),
         '&nbsp;<i class="fas fa-edit"></i>'
       ) +
@@ -2441,17 +2449,25 @@ const workflowRunPromiseHandler = (promise, run, req) => {
         !emitData.resume_workflow &&
         !emitData.popup?.startsWith?.("/actions/fill-workflow-form/")
       )
-        getState().emitDynamicUpdate(db.getTenantSchema(), {
-          eval_js: "reset_spinners()",
-          page_load_tag: req.headers["page-load-tag"],
-        }, userIds);
+        getState().emitDynamicUpdate(
+          db.getTenantSchema(),
+          {
+            eval_js: "reset_spinners()",
+            page_load_tag: req.headers["page-load-tag"],
+          },
+          userIds
+        );
     })
     .catch((e) => {
       console.error(e);
-      getState().emitDynamicUpdate(db.getTenantSchema(), {
-        error: e.message,
-        page_load_tag: req.headers["page-load-tag"],
-      }, req.user ? [req.user.id] : null);
+      getState().emitDynamicUpdate(
+        db.getTenantSchema(),
+        {
+          error: e.message,
+          page_load_tag: req.headers["page-load-tag"],
+        },
+        req.user ? [req.user.id] : null
+      );
     });
 };
 

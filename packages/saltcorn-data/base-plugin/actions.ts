@@ -345,28 +345,62 @@ export = {
      * @returns {object[]}
      */
     description: "Emit an event",
-    configFields: () => [
-      {
-        name: "eventType",
-        label: "Event type",
-        required: true,
-        input_type: "select",
-        options: Trigger.when_options,
-      },
-      {
-        name: "channel",
-        label: "Channel",
-        type: "String",
-        fieldview: "textarea",
-      },
-      {
-        name: "payload",
-        label: "Payload JSON",
-        sublabel: "Leave blank to use row from table",
-        type: "String",
-        fieldview: "textarea",
-      },
-    ],
+    configFields: async ({ table }: { table: Table }) => {
+      const evTypes = Trigger.when_options;
+      const hasChannel: string[] = [];
+      const hasTable: string[] = [];
+      evTypes.forEach((ty) => {
+        if (EventLog.hasChannel(ty)) hasChannel.push(ty);
+        if (EventLog.hasTable(ty)) hasTable.push(ty);
+      });
+      const allTables = await Table.find({}, { cached: true });
+      return [
+        {
+          name: "eventType",
+          label: "Event type",
+          required: true,
+          input_type: "select",
+          options: evTypes,
+        },
+        {
+          name: "channel",
+          label: "Channel",
+          type: "String",
+          showIf: { eventType: hasChannel },
+          help: {
+            topic: "Event channel and payload",
+          },
+        },
+        {
+          name: "channel",
+          label: "Table",
+          type: "String",
+          showIf: { eventType: hasTable },
+          required: true,
+          attributes: { options: allTables.map((t) => t.name) },
+          help: {
+            topic: "Event channel and payload",
+          },
+        },
+        {
+          name: "payload",
+          label: "Payload JSON",
+          sublabel: `Leave blank to use row from table. <code>user</code> ${table ? `and field variables ` : ""}in scope`,
+          input_type: "code",
+          attributes: {
+            mode: "application/javascript",
+            compact: true,
+            expression_type: "row",
+            table: table?.name,
+            nojoins: true,
+            user: true,
+          },
+          help: {
+            topic: "Event channel and payload",
+          },
+        },
+      ];
+    },
     /**
      * @param {object} opts
      * @param {object} opts.row
@@ -425,7 +459,7 @@ export = {
         {
           name: "where",
           label: "Where",
-          sublabel: "Where-expression for subset of rows to loop over",
+          sublabel: `Where-expression for subset of rows to loop over. For example: <code>{status: "Active"}</code>`,
           input_type: "code",
           attributes: {
             mode: "application/javascript",
@@ -563,7 +597,8 @@ export = {
           name: "url",
           label: "URL",
           type: "String",
-          sublabel: "Trigger will call specified URL",
+          sublabel:
+            "Trigger will call specified URL. Interpolations <code>{{ }}</code> can be used",
         },
         {
           name: "method",
@@ -575,16 +610,24 @@ export = {
         {
           name: "body",
           label: "JSON body",
-          sublabel: "Leave blank to use row from table",
-          type: "String",
-          fieldview: "textarea",
           showIf: { method: ["POST", "PUT", "DELETE", "PATCH"] },
+          sublabel: `Leave blank to use row from table.${table ? ` <code>user</code> and field variables in scope` : ""}`,
+          input_type: "code",
+          attributes: {
+            mode: "application/javascript",
+            compact: true,
+            expression_type: "row",
+            table: table?.name,
+            nojoins: true,
+            user: true,
+          },
         },
         {
           name: "authorization",
           label: "Authorization header",
           type: "String",
-          sublabel: "For example <code>Bearer xxxx</code>",
+          sublabel:
+            "For example <code>Bearer xxxx</code>. Interpolations <code>{{ }}</code> can be used",
         },
         ...(field_opts.length
           ? [
@@ -639,7 +682,7 @@ export = {
         method?: string;
       };
     }) => {
-      let url1 = interpolate(url, row, user, "Webhook URL");
+      let url1 = interpolate(url, row || {}, user, "Webhook URL");
 
       const fetchOpts = {
         method: (method || "post").toLowerCase(),
@@ -1409,12 +1452,13 @@ export = {
         {
           name: "where",
           label: "Recalculate where",
-          sublabel: "Where-expression for subset of rows to recalculate",
+          sublabel: "Where-expression for subset of rows to recalculate. Example: <code>{manager: id}</code>",
           input_type: "code",
           attributes: {
             mode: "application/javascript",
             singleline: true,
             expression_type: "query",
+            ...(table ? { table: table.name } : {}),
           },
         },
       ];
@@ -1479,7 +1523,7 @@ export = {
      * @returns {Promise<object[]>}
      */
     description: "insert a row into any table, using a formula expression",
-    configFields: async ({ mode }: any) => {
+    configFields: async ({ mode, table }: any) => {
       const tables = await Table.find({}, { cached: true });
       return [
         {
@@ -1494,11 +1538,14 @@ export = {
           label: "Row expression",
           sublabel:
             "Expression for JavaScript object or array of objects. Example: <code>{first_name: name.split(' ')[0]}</code>",
-          type: "String",
-          fieldview: "textarea",
-          class: "validate-expression",
+          input_type: "code",
           attributes: {
-            spellcheck: false,
+            mode: "application/javascript",
+            compact: true,
+            expression_type: "row",
+            table: table?.name,
+            nojoins: true,
+            user: true,
           },
         },
         ...(mode === "workflow"
@@ -1604,9 +1651,11 @@ export = {
     configFields: async ({
       mode,
       when_trigger,
+      table,
     }: {
       mode: string;
       when_trigger: string;
+      table: Table;
     }) => {
       return [
         {
@@ -1619,6 +1668,9 @@ export = {
             mode: "application/javascript",
             compact: true,
             expression_type: "row",
+            table: table?.name,
+            nojoins: true,
+            user: true,
           },
         },
         ...(mode === "edit" ||
@@ -1741,7 +1793,7 @@ export = {
      * @returns {Promise<object[]>}
      */
     description: "Modify the triggering row",
-    configFields: async ({ mode, when_trigger }: any) => {
+    configFields: async ({ mode, table, when_trigger }: any) => {
       const tables = await Table.find({}, { cached: true });
 
       return [
@@ -1766,10 +1818,16 @@ export = {
         {
           name: "delete_where",
           label: "Delete where",
-          type: "String",
+          input_type: "code",
+          attributes: {
+            mode: "application/javascript",
+            singleline: true,
+            expression_type: "query",
+            ...(table ? { table: table.name } : {}),
+          },
           sublabel: "Where expression, ex. <code>{manager: id}</code>",
           required: true,
-          class: "validate-expression",
+
           showIf:
             mode === "workflow" ? undefined : { delete_triggering_row: false },
         },
@@ -1808,7 +1866,7 @@ export = {
         delete_where,
         row || {},
         user,
-        "recalculate_stored_fields where"
+        "delete_rows where"
       );
       const tbl = Table.findOne({ name: table_name });
       await tbl!.deleteRows(where, user, false, resultCollector);
@@ -1829,7 +1887,7 @@ export = {
      * @returns {Promise<object[]>}
      */
     description: "Navigation action",
-    configFields: async () => {
+    configFields: async ({ table }: { table: Table }) => {
       const pages = await Page.find({}, { cached: true });
       const views = await View.find({}, { cached: true });
       return [
@@ -1857,6 +1915,8 @@ export = {
           type: "String",
           required: true,
           showIf: { nav_action: ["Go to URL", "Popup modal"] },
+          sublabel:
+            "Use interpolations <code>{{ }}</code> to access row variables",
         },
         {
           name: "page",
@@ -1875,9 +1935,20 @@ export = {
         {
           name: "state_formula",
           label: "State",
-          type: "String",
-          class: "validate-expression",
+          input_type: "code",
+          attributes: {
+            mode: "application/javascript",
+            singleline: true,
+            expression_type: "query",
+            ...(table ? { table: table.name } : {}),
+          },
           showIf: { nav_action: ["Go to Page", "Go to View"] },
+          sublabel: `Additional state passed to the page. Example: <code>{id: 5}</code>`,
+          help: {
+            topic: "Extra state formula",
+            context: table ? { srcTable: table.name } : {},
+            dynContext: ["view"],
+          },
         },
         {
           name: "new_tab",
@@ -2035,18 +2106,29 @@ export = {
       {
         name: "form_action",
         label: "Form Action",
-        type: "String",
+        input_type: "select",
         required: true,
         attributes: {
-          options: [
-            "RequestSubmit",
-            "Submit",
-            "Save",
-            "Reset",
-            "Submit with Ajax",
-            "Ajax Save Form Data",
-          ],
+          explainers: {
+            RequestSubmit:
+              "Validate the form, and submit if no errors, or display errors",
+            Submit: "Submit the form, skipping validation",
+            Save: "Save the form contents on the server, stay on the form page",
+            Reset: "Reset the form to the state it was in at page load time",
+            "Submit with Ajax":
+              "Submit the form with Ajax and follow the set destination if there are no errors",
+            "Ajax Save Form Data":
+              "Submit the form with Ajax and close the open popup ",
+          },
         },
+        options: [
+          "RequestSubmit",
+          "Submit",
+          "Save",
+          "Reset",
+          "Submit with Ajax",
+          "Ajax Save Form Data",
+        ],
       },
     ],
 
@@ -2227,12 +2309,13 @@ export = {
         label: "Text",
         type: "String",
         required: true,
+        sublabel: "Interpolations <code>{{ }}</code> can be used",
       },
       {
         name: "title",
         label: "Title",
-        sublabel: "Optional",
         type: "String",
+        sublabel: "Optional. Interpolations <code>{{ }}</code> can be used",
       },
       {
         name: "remove_delay",
@@ -2362,8 +2445,10 @@ export = {
               let AsyncFunction = Object.getPrototypeOf(
                 async function () {}
               ).constructor;
-              AsyncFunction(stripTypes(`async () =>{${s}
-}`));
+              AsyncFunction(
+                stripTypes(`async () =>{${s}
+}`)
+              );
               return true;
             } catch (e: any) {
               return e.message;
@@ -2831,7 +2916,7 @@ export = {
   },
   reload_embedded_view: {
     description: "Reload an embedded view without full page reload",
-    configFields: async () => {
+    configFields: async ({ table }: { table: Table }) => {
       const views = await View.find({});
       return [
         {
@@ -2845,8 +2930,19 @@ export = {
         {
           name: "new_state_fml",
           label: "New state formula",
-          type: "String",
-          class: "validate-expression",
+          input_type: "code",
+          attributes: {
+            mode: "application/javascript",
+            singleline: true,
+            expression_type: "row",
+            ...(table ? { table: table.name } : {}),
+          },
+          sublabel: `Optional. Updated view state. Example: <code>{id: 5}</code>. Leave blank to keep existing state`,
+          help: {
+            topic: "Extra state formula",
+            context: table ? { srcTable: table.name } : {},
+            dynContext: ["view"],
+          },
         },
         {
           name: "interval",
@@ -2909,7 +3005,7 @@ export = {
         class: "validate-identifier",
         required: true,
         sublabel:
-          "A valid JavaScript identifier for updating existing progress toasts",
+          "A valid JavaScript identifier for updating existing progress toasts. Interpolations <code>{{ }}</code> can be used",
         showIf: { blocking: false },
       },
       {
@@ -2932,12 +3028,16 @@ export = {
         label: "Title",
         type: "String",
         showIf: { close: false },
+        sublabel:
+          "Use interpolations <code>{{ }}</code> to access row variables",
       },
       {
         name: "message",
         label: "Message",
         type: "String",
         showIf: { close: false },
+        sublabel:
+          "Use interpolations <code>{{ }}</code> to access row variables",
       },
       {
         name: "percent",
@@ -3047,27 +3147,31 @@ export = {
   },
   notify_user: {
     description: "Send a notification to a specific user",
-    configFields: () => [
+    configFields: ({ table }: { table: Table }) => [
       {
         name: "user_spec",
         label: "User where or email",
         type: "String",
+        sublabel: `Valid input: <code>*</code> for all, a valid email address, or a where object, e.g. <code>{department: "Finance"}</code>${table ? ". Row values are in scope for where object." : ""}`,
       },
       {
         name: "title",
         label: "Title",
         required: true,
         type: "String",
+        sublabel: "<code>{{ }}</code> interpolations usable",
       },
       {
         name: "body",
         label: "Body",
         type: "String",
+        sublabel: "<code>{{ }}</code> interpolations usable",
       },
       {
         name: "link",
         label: "Link",
         type: "String",
+        sublabel: "<code>{{ }}</code> interpolations usable",
       },
     ],
     /**
