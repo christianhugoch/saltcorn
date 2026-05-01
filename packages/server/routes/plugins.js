@@ -475,7 +475,11 @@ const match_string = (s, q) => {
  * @returns {boolean}
  */
 const satisfy_q = (p, q) => {
-  return match_string(p.name, q) || match_string(p.description, q);
+  return (
+    match_string(p.name, q) ||
+    match_string(p.description, q) ||
+    match_string(p.contents, q)
+  );
 };
 
 /**
@@ -1296,9 +1300,10 @@ router.get(
     let latest =
       update_permitted &&
       (await get_latest_npm_version(plugin_db.location, 1000));
+    let isNpm = plugin_db.source === "npm";
     let engineInfos = await Plugin.getEngineInfos(plugin_db); // with cache
     let forceFetch = true;
-    if (latest && !engineInfos[latest]) {
+    if (latest && !engineInfos[latest] && isNpm) {
       engineInfos = await Plugin.getEngineInfos(plugin_db, forceFetch);
       forceFetch = false;
     }
@@ -1378,6 +1383,12 @@ router.get(
                   store_item.documentation_link
                 )
               )
+            )
+          : null,
+        store_item && store_item.contents
+          ? tr(
+              th(req.__("Detailed contents")),
+              td(md.render(store_item.contents))
             )
           : null,
         pkgjson && pkgjson.repository

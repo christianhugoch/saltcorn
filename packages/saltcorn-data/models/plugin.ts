@@ -352,6 +352,8 @@ class Plugin implements AbstractPlugin {
     if (airgap || (cached[plugin.location] && !forceFetch)) {
       return cached[plugin.location] || {};
     } else {
+      //TODO do this correctly for local plugins
+      if (plugin.source !== "npm") return {};
       getState().log(5, `Fetching versions for '${plugin.location}'`);
       const pkgInfo = await npmFetch.json(
         `https://registry.npmjs.org/${plugin.location}`,
@@ -380,9 +382,10 @@ class Plugin implements AbstractPlugin {
     forceFetch?: boolean
   ): Promise<void> {
     const { getState } = require("../db/state");
-    const { supportedVersion, resolveLatest } = require(
-      "@saltcorn/plugins-loader/stable_versioning"
-    );
+    const {
+      supportedVersion,
+      resolveLatest,
+    } = require("@saltcorn/plugins-loader/stable_versioning");
     let versions = await Plugin.getEngineInfos(plugin, forceFetch);
     if (
       plugin.version &&
