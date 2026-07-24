@@ -63,8 +63,7 @@ const locales = Object.keys(available_languages);
 // Compared case-insensitively below, and the iOS entry is lowercased -
 // double check it matches once tested on a real device.
 const MOBILE_APP_ORIGINS = new Set([
-  "https://localhost", // Android (default secure scheme)
-  "http://localhost", // Android emulator/unsecureNetwork dev builds
+  "https://localhost", // Android
   "saltcornmobileapp://localhost", // iOS
 ]);
 
@@ -450,7 +449,14 @@ const getApp = async (opts = {}) => {
   app.use(function (req, res, next) {
     if (req.headers["x-saltcorn-client"] === "mobile-app") {
       req.smr = true; // saltcorn-mobile-request
-      if (req.session?.cookie) {
+      // Only a genuine native app (a different origin from the server) needs
+      // SameSite=None+Secure - the "web" build variant runs same-origin
+      // (e.g. served from the server itself for testing), where forcing
+      // Secure would just break the cookie over plain HTTP for no reason.
+      req.mobileCrossOrigin = MOBILE_APP_ORIGINS.has(
+        (req.headers.origin || "").toLowerCase()
+      );
+      if (req.mobileCrossOrigin && req.session?.cookie) {
         req.session.cookie.sameSite = "none";
         req.session.cookie.secure = true;
       }

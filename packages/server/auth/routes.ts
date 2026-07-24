@@ -574,7 +574,7 @@ const loginWithSession = async (
           return;
         }
         // see the matching note in the /login-with/session route
-        if (req.session?.cookie) {
+        if (req.mobileCrossOrigin && req.session?.cookie) {
           req.session.cookie.sameSite = "none";
           req.session.cookie.secure = true;
         }
@@ -1687,7 +1687,9 @@ router.post(
       }
       req.login(user, async (loginErr: any) => {
         if (loginErr) return next(loginErr);
-        if (req.session?.cookie) {
+        // req.login() regenerates the session, undoing app.js's cookie
+        // override - reapply it, but only for genuinely cross-origin requests.
+        if (req.mobileCrossOrigin && req.session?.cookie) {
           req.session.cookie.sameSite = "none";
           req.session.cookie.secure = true;
         }

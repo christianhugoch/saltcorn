@@ -1,64 +1,77 @@
-import db from "../db/index.js";
-import jsonwebtoken from "jsonwebtoken";
-const { sign } = jsonwebtoken;
 import axiosLib from "axios";
 const axios: any = axiosLib;
-import User from "../models/user.js";
 import * as State from "../db/state.js";
 
 declare let global: any;
 
+const baseURL = "http://localhost:3000";
+
+// Node's axios has no browser cookie jar, so the session cookie has to be
+// tracked and attached by hand. Registered once on the shared default axios
+// instance, so it also covers view.ts's own internal axios calls for remote
+// queries (it imports the same default axios module).
+let sessionCookie: string | undefined;
+axios.interceptors.request.use((config: any) => {
+  if (sessionCookie) {
+    config.headers = config.headers || {};
+    config.headers["Cookie"] = sessionCookie;
+  }
+  return config;
+});
+axios.interceptors.response.use((response: any) => {
+  const setCookie = response.headers?.["set-cookie"];
+  if (setCookie)
+    sessionCookie = setCookie.map((c: string) => c.split(";")[0]).join("; ");
+  return response;
+});
+
+const fetchCsrfToken = async (): Promise<string> => {
+  const res = await axios.get(`${baseURL}/auth/csrf-token`);
+  return res.data.csrfToken;
+};
+
 export const prepareQueryEnviroment = async () => {
-  const user = await User.findOne({ email: "admin@foo.com" });
-  const token = process.env.JSON_WEB_TOKEN
-    ? process.env.JSON_WEB_TOKEN
-    : sign(
-        {
-          sub: "admin@foo.com",
-          role_id: 1,
-          iss: "saltcorn@saltcorn",
-          aud: "saltcorn-mobile-app",
-          iat: user?.last_mobile_login?.valueOf(),
-        },
-        db.connectObj.jwt_secret
-      );
-  global.window = {
-    localStorage: {
-      getItem: (item: string) => {
-        if (item === "auth_jwt") return token;
-        return undefined;
-      },
-    },
-  };
+  // isNode() checks for the absence of a global `window`, which is how view
+  // templates decide to render mobile-style markup (e.g. execLink onclick
+  // instead of a plain href) - set it to simulate the mobile/webview context
+  // these remote-query tests are meant to exercise.
+  global.window = {};
+  const csrfToken = await fetchCsrfToken();
+  const loginRes = await axios.post(
+    `${baseURL}/auth/login-with/session`,
+    { email: "admin@foo.com", password: "AhGGr6rhu45" },
+    { headers: { "CSRF-Token": csrfToken } }
+  );
+  if (!loginRes.data.success) throw new Error("Test admin login failed");
+  // req.login() regenerates the session, so the pre-login CSRF token is stale.
   const state = await State.getState();
-  state!.mobileConfig = { jwt: token } as any;
+  state!.mobileConfig = {
+    hasSession: true,
+    csrfToken: await fetchCsrfToken(),
+  } as any;
 };
 
 export const sendViewToServer = async (view: any) => {
   let copy = JSON.parse(JSON.stringify(view));
   copy.id = undefined;
-  const url = `http://localhost:3000/viewedit/test/inserter`;
-  const token = global.window.localStorage.getItem("auth_jwt");
-  await axios.post(url, copy, {
+  const state = await State.getState();
+  await axios.post(`${baseURL}/viewedit/test/inserter`, copy, {
     headers: {
-      Authorization: `jwt ${token}`,
       "X-Requested-With": "XMLHttpRequest",
-      "X-Saltcorn-Client": "mobile-app",
+      "CSRF-Token": state!.mobileConfig?.csrfToken,
     },
   });
 };
 
 export const deleteViewFromServer = async (id: number) => {
-  const url = `http://localhost:3000/viewedit/delete/${id}`;
-  const token = global.window.localStorage.getItem("auth_jwt");
+  const state = await State.getState();
   await axios.post(
-    url,
+    `${baseURL}/viewedit/delete/${id}`,
     {},
     {
       headers: {
-        Authorization: `jwt ${token}`,
         "X-Requested-With": "XMLHttpRequest",
-        "X-Saltcorn-Client": "mobile-app",
+        "CSRF-Token": state!.mobileConfig?.csrfToken,
       },
     }
   );
