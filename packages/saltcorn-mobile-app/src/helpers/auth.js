@@ -1,6 +1,5 @@
 /*global saltcorn*/
 
-import { jwtDecode } from "jwt-decode";
 import i18next from "i18next";
 import { apiCall } from "./api";
 import { router } from "../routing/index";
@@ -15,50 +14,51 @@ import {
 } from "./common";
 
 /**
- * internal helper for the normal login/signup and public login
+ * fetches a CSRF token and caches it in mobileConfig.csrfToken.
+ * Call again after every login/logout, since both reset it.
+ */
+export async function refreshCsrfToken() {
+  const response = await apiCall({ method: "GET", path: "/auth/csrf-token" });
+  const config = saltcorn.data.state.getState().mobileConfig;
+  config.csrfToken = response?.data?.csrfToken;
+  return config.csrfToken;
+}
+
+/**
+ * internal helper for the normal login/signup
  * @param {any} param0
  * @returns
  */
-async function loginRequest({ email, password, isSignup, isPublic }) {
-  const opts = isPublic
-    ? {
-        method: "GET",
-        path: "/auth/login-with/jwt",
-      }
-    : isSignup
+async function loginRequest({ email, password, isSignup }) {
+  await refreshCsrfToken();
+  const opts = isSignup
     ? {
         method: "POST",
         path: "/auth/signup",
-        body: {
-          email,
-          password,
-        },
+        body: { email, password },
       }
     : {
         method: "POST",
-        path: "/auth/login-with/jwt",
-        body: {
-          email,
-          password,
-        },
+        path: "/auth/login-with/session",
+        body: { email, password },
       };
   const response = await apiCall(opts);
   return response.data;
 }
 
 /**
- * internal helper to process a JWT token
- * @param {string} tokenStr
+ * internal helper to process a successful session login response
+ * ({ success: true, user }) and persist it locally
  */
-const handleToken = async (tokenStr, config) => {
-  const token = jwtDecode(tokenStr);
-  const user = token.user;
+const handleSessionLogin = async (user, config) => {
   config.user = user;
   config.isPublicUser = false;
   config.isOfflineMode = false;
+  config.hasSession = true;
   await insertUser(user);
-  await setJwt(tokenStr);
-  config.jwt = tokenStr;
+  // login regenerated the session, so the previously fetched token is stale
+  await refreshCsrfToken();
+  await persistSession(config);
   i18next.changeLanguage(user.language);
 };
 
@@ -101,22 +101,21 @@ const getEntryPoint = (config) => {
 };
 
 /**
- * For normal login/signup email and password are used
- * When called from auth provider login (see google-auth plugin), token is used
+ * For normal login/signup email and password are used.
+ * OAuth-provider login (e.g. google-auth) isn't supported yet - see finishLogin().
  * @param {*} param0
  */
 export async function login({ email, password, isSignup, token }) {
-  const loginResult = !token
-    ? await loginRequest({
-        email,
-        password,
-        isSignup,
-      })
-    : token;
-  if (typeof loginResult === "string") {
+  if (token) {
+    throw new Error(
+      "OAuth-provider mobile login is not yet supported with session auth."
+    );
+  }
+  const loginResult = await loginRequest({ email, password, isSignup });
+  if (loginResult?.success && loginResult?.user) {
     const alerts = [];
     const config = saltcorn.data.state.getState().mobileConfig;
-    await handleToken(loginResult, config);
+    await handleSessionLogin(loginResult.user, config);
     if (config.allowOfflineMode) alerts.push(await initialSync(config));
     await tryInitPush(config);
     await tryInitBackgroundSync(config);
@@ -137,6 +136,8 @@ export async function login({ email, password, isSignup, token }) {
       alerts,
     });
     if (page.content) await replaceIframe(page.content, page.isFile);
+  } else if (loginResult?.error) {
+    showToasts([{ type: "error", msg: loginResult.error }]);
   } else if (loginResult?.alerts) {
     showToasts(loginResult?.alerts);
   } else {
@@ -146,44 +147,39 @@ export async function login({ email, password, isSignup, token }) {
 
 export async function publicLogin(entryPoint) {
   try {
-    const loginResult = await loginRequest({ isPublic: true });
-    if (typeof loginResult === "string") {
-      const config = saltcorn.data.state.getState().mobileConfig;
-      config.user = {
-        role_id: 100,
-        email: "public",
-        language: "en",
-      };
-      config.isPublicUser = true;
-      await setJwt(loginResult);
-      config.jwt = loginResult;
-      i18next.changeLanguage(config.user.language);
-      addRoute({
-        route: entryPoint,
-        query: undefined,
-      });
-      const page = await router.resolve({
-        pathname: entryPoint,
-        fullWrap: true,
-        alerts: [
-          {
-            type: "success",
-            msg: i18next.t("Welcome to %s!", {
-              postProcess: "sprintf",
-              sprintf: [
-                saltcorn.data.state.getState().getConfig("site_name") ||
-                  "Saltcorn",
-              ],
-            }),
-          },
-        ],
-      });
-      if (page.content) await replaceIframe(page.content, page.isFile);
-    } else if (loginResult?.alerts) {
-      showToasts(loginResult?.alerts);
-    } else {
-      throw new Error("The login failed.");
-    }
+    const config = saltcorn.data.state.getState().mobileConfig;
+    // no login needed for public, but a CSRF token is still cached upfront.
+    await refreshCsrfToken();
+    config.user = {
+      role_id: 100,
+      email: "public",
+      language: "en",
+    };
+    config.isPublicUser = true;
+    config.hasSession = true;
+    await persistSession(config);
+    i18next.changeLanguage(config.user.language);
+    addRoute({
+      route: entryPoint,
+      query: undefined,
+    });
+    const page = await router.resolve({
+      pathname: entryPoint,
+      fullWrap: true,
+      alerts: [
+        {
+          type: "success",
+          msg: i18next.t("Welcome to %s!", {
+            postProcess: "sprintf",
+            sprintf: [
+              saltcorn.data.state.getState().getConfig("site_name") ||
+                "Saltcorn",
+            ],
+          }),
+        },
+      ],
+    });
+    if (page.content) await replaceIframe(page.content, page.isFile);
   } catch (error) {
     console.error(error);
     showToasts([
@@ -203,9 +199,11 @@ export async function logout() {
     await tryStopBackgroundSync();
     const response = await apiCall({ method: "GET", path: "/auth/logout" });
     if (response.data.success) {
-      await removeJwt();
+      await clearSession();
       clearHistory();
-      config.jwt = undefined;
+      config.csrfToken = undefined;
+      config.hasSession = false;
+      config.isPublicUser = false;
       const page = await router.resolve({
         pathname: "get/auth/login",
         entryView: config.entry_point,
@@ -232,43 +230,34 @@ export async function insertUser({ id, email, role_id, language }) {
   );
 }
 
-export async function removeJwt() {
-  await saltcorn.data.db.deleteWhere("jwt_table");
+export async function clearSession() {
+  await saltcorn.data.db.deleteWhere("session_table");
 }
 
-export async function setJwt(jwt) {
-  await removeJwt();
-  await saltcorn.data.db.insert("jwt_table", { jwt: jwt });
+/**
+ * persists the current mobileConfig session state (csrf token, user,
+ * public/authenticated flag) so the app can restore it at next boot
+ * without a network call (used e.g. when starting offline).
+ */
+export async function persistSession(config) {
+  await clearSession();
+  await saltcorn.data.db.insert("session_table", {
+    csrfToken: config.csrfToken,
+    userJson: config.isPublicUser ? null : JSON.stringify(config.user),
+    isPublicUser: !!config.isPublicUser,
+  });
 }
 
-async function renewJwt() {
-  try {
-    const response = await apiCall({
-      method: "POST",
-      path: "/auth/renew-jwt",
-    });
-    if (typeof response.data === "string") {
-      const config = saltcorn.data.state.getState().mobileConfig;
-      await setJwt(response.data);
-      config.jwt = response.data;
-    }
-  } catch (e) {
-    console.error("JWT renewal failed:", e.message);
-  }
-}
-
-export async function checkJWT(jwtStr) {
-  if (jwtStr && jwtStr !== "undefined") {
-    const response = await apiCall({
-      method: "GET",
-      path: "/auth/authenticated",
-      timeout: 10000,
-    });
-    if (!response.data.authenticated) return false;
-    const decoded = jwtDecode(jwtStr);
-    if (decoded.exp && decoded.exp - Date.now() / 1000 < 7 * 24 * 3600) {
-      await renewJwt();
-    }
-    return true;
-  } else return false;
+/**
+ * checks with the server whether the current session cookie is still valid,
+ * and refreshes the cached CSRF token (its secret lives in the session, so
+ * it's fine to keep reusing the same token as long as the session is alive).
+ */
+export async function checkSession() {
+  const response = await apiCall({
+    method: "GET",
+    path: "/auth/authenticated",
+    timeout: 10000,
+  });
+  return !!response?.data?.authenticated;
 }

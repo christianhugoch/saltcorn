@@ -371,7 +371,8 @@ export class MobileBuilder {
       this.backgroundSyncEnabled,
       this.pushSync,
       this.allowClearTextTraffic,
-      this.backgroundFetchEnabled
+      this.backgroundFetchEnabled,
+      this.serverURL
     );
     if (this.pushSync) {
       writeEntitlementsPlist(

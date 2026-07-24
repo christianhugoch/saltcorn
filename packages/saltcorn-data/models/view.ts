@@ -52,7 +52,6 @@ import type {
 import type { AbstractTable } from "@saltcorn/types/model-abstracts/abstract_table";
 import axiosLib from "axios";
 const axios: any = axiosLib; // NodeNext default-import interop: axios types resolve to the module namespace
-import { jwtDecode } from "jwt-decode";
 import { AbstractTag } from "@saltcorn/types/model-abstracts/abstract_tag";
 import bcryptjs from "bcryptjs";
 const { hash } = bcryptjs;
@@ -604,71 +603,15 @@ class View implements AbstractView {
             "X-Requested-With": "XMLHttpRequest",
             "X-Saltcorn-Client": "mobile-app",
           };
-          let token = state.mobileConfig?.jwt;
-          if (token) {
-            const goToLogin = async () => {
-              state.mobileConfig!.jwt = undefined;
-              await db.deleteWhere("jwt_table", {});
-              const mobileNav = (globalThis as any).saltcorn?.mobileApp
-                ?.navigation;
-              if (mobileNav) {
-                mobileNav.clearHistory();
-                const page = await mobileNav.router.resolve({
-                  pathname: "get/auth/login",
-                  alerts: [
-                    {
-                      type: "warning",
-                      msg: "Your session has expired, please log in again.",
-                    },
-                  ],
-                });
-                await mobileNav.replaceIframe(page.content);
-              }
-            };
-            try {
-              const decoded = jwtDecode(token) as any;
-              const now = Date.now() / 1000;
-              if (decoded.exp && decoded.exp < now) {
-                console.log("JWT is expired, redirecting to login.");
-                return await goToLogin();
-              } else if (decoded.exp && decoded.exp - now < 7 * 24 * 3600) {
-                console.log("JWT is about to expire, attempting renewal.");
-                try {
-                  const renewResponse = await axios.post(
-                    `${base_url}/auth/renew-jwt`,
-                    {},
-                    { headers }
-                  );
-                  if (typeof renewResponse.data === "string") {
-                    try {
-                      jwtDecode(renewResponse.data);
-                      token = renewResponse.data;
-                      state.mobileConfig!.jwt = token;
-                      await db.deleteWhere("jwt_table", {});
-                      await db.insert("jwt_table", { jwt: token });
-                    } catch {
-                      console.error(
-                        "Renewed token is not a valid JWT, redirecting to login."
-                      );
-                      await goToLogin();
-                      return;
-                    }
-                  }
-                } catch (renewError: any) {
-                  console.error(`JWT renewal failed: ${renewError.message}`);
-                }
-              }
-            } catch (decodeError: any) {
-              console.error(`JWT decode failed: ${decodeError.message}`);
-            }
-            headers.Authorization = `jwt ${token}`;
-          }
+          if (state.mobileConfig?.csrfToken)
+            headers["CSRF-Token"] = state.mobileConfig.csrfToken;
           try {
             let response = await axios.post(
               url,
               { args },
               {
                 headers,
+                withCredentials: true,
               }
             );
             for (const { type, msg } of response.data.alerts)

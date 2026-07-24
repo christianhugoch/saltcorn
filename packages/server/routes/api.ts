@@ -187,41 +187,34 @@ router.post(
       });
       return;
     }
-    await passport.authenticate(
-      "jwt",
-      { session: false },
-      async function (err: any, user: any, info: any) {
-        const role = user && user.id ? user.role_id : 100;
-        if (
-          role <= view.min_role ||
-          (await view.authorize(user, { action: "get", req })) // TODO set query to state
-        ) {
-          const queries = view.queries(false, req, res);
-          if (Object.prototype.hasOwnProperty.call(queries, queryName)) {
-            const { args } = req.body || {};
-            const resp = await queries[queryName](...args, true);
-            res.json({ success: resp, alerts: getFlashes(req) });
-          } else {
-            getState()!.log(
-              3,
-              `API viewQuery ${view.name} ${queryName} not found`
-            );
-            res.status(404).json({
-              error: req.__("Query %s not found", queryName),
-              view: viewName,
-              queryName: queryName,
-              smr: req.smr,
-              smrHeader: req.headers["x-saltcorn-client"],
-              schema: db.getTenantSchema(),
-              userTenant: req.user?.tenant,
-            });
-          }
-        } else {
-          getState()!.log(3, `API viewQuery ${view.name} not authorized`);
-          res.status(401).json({ error: req.__("Not authorized") });
-        }
+    // req.user is already set from the session by app.js's auth middleware.
+    const user = req.user;
+    const role = user && user.id ? user.role_id : 100;
+    if (
+      role <= view.min_role ||
+      (await view.authorize(user, { action: "get", req })) // TODO set query to state
+    ) {
+      const queries = view.queries(false, req, res);
+      if (Object.prototype.hasOwnProperty.call(queries, queryName)) {
+        const { args } = req.body || {};
+        const resp = await queries[queryName](...args, true);
+        res.json({ success: resp, alerts: getFlashes(req) });
+      } else {
+        getState()!.log(3, `API viewQuery ${view.name} ${queryName} not found`);
+        res.status(404).json({
+          error: req.__("Query %s not found", queryName),
+          view: viewName,
+          queryName: queryName,
+          smr: req.smr,
+          smrHeader: req.headers["x-saltcorn-client"],
+          schema: db.getTenantSchema(),
+          userTenant: req.user?.tenant,
+        });
       }
-    )(req, res, next);
+    } else {
+      getState()!.log(3, `API viewQuery ${view.name} not authorized`);
+      res.status(401).json({ error: req.__("Not authorized") });
+    }
   })
 );
 
@@ -603,50 +596,34 @@ router.get(
 router.post(
   "/emit-event/:eventname",
   error_catcher(async (req: Req, res: Res, next: any) => {
-    await passport.authenticate(
-      "jwt",
-      { session: false },
-      async function (err: any, user: any, info: any) {
-        if (!user) {
-          getState()!.log(3, `API POST emit-event not authorized`);
-          return res.status(401).json({ error: req.__("Not authorized") });
-        }
-        const { eventname } = req.params;
-        const { channel, payload } = req.body;
-        const state = getState()!;
-        if (!user.id) {
-          // public user — only allowed if explicitly configured
-          const publicAllowed = state.getConfig(
-            "mobile_emit_public_events",
-            []
-          );
-          if (!publicAllowed.includes(eventname)) {
-            state.log(3, `API POST emit-event not authorized for public user`);
-            return res.status(401).json({ error: req.__("Not authorized") });
-          }
-        } else {
-          // authenticated user — ReceiveMobileShareData always allowed, rest requires config
-          const configAllowed = state.getConfig(
-            "mobile_emit_allowed_events",
-            []
-          );
-          if (
-            eventname !== "ReceiveMobileShareData" &&
-            !configAllowed.includes(eventname)
-          ) {
-            state.log(
-              3,
-              `API POST emit-event: event type '${eventname}' not allowed`
-            );
-            return res
-              .status(403)
-              .json({ error: req.__("Event type not allowed") });
-          }
-        }
-        Trigger.emitEvent(eventname, channel, user, payload);
-        res.json({ success: true });
+    // req.user is already set from the session by app.js; no user means public/anonymous.
+    const user = req.user;
+    const { eventname } = req.params;
+    const { channel, payload } = req.body;
+    const state = getState()!;
+    if (!user?.id) {
+      // public user — only allowed if explicitly configured
+      const publicAllowed = state.getConfig("mobile_emit_public_events", []);
+      if (!publicAllowed.includes(eventname)) {
+        state.log(3, `API POST emit-event not authorized for public user`);
+        return res.status(401).json({ error: req.__("Not authorized") });
       }
-    )(req, res, next);
+    } else {
+      // authenticated user — ReceiveMobileShareData always allowed, rest requires config
+      const configAllowed = state.getConfig("mobile_emit_allowed_events", []);
+      if (
+        eventname !== "ReceiveMobileShareData" &&
+        !configAllowed.includes(eventname)
+      ) {
+        state.log(
+          3,
+          `API POST emit-event: event type '${eventname}' not allowed`
+        );
+        return res.status(403).json({ error: req.__("Event type not allowed") });
+      }
+    }
+    Trigger.emitEvent(eventname, channel, user, payload);
+    res.json({ success: true });
   })
 );
 

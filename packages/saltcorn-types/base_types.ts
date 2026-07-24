@@ -810,7 +810,8 @@ export type MobileConfig = {
 
   user?: any;
   isPublicUser?: boolean;
-  jwt?: string;
+  hasSession?: boolean;
+  csrfToken?: string;
   inErrorState?: boolean;
   inLoadState?: boolean;
   encodedSiteLogo?: string;

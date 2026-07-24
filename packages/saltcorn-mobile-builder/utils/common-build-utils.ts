@@ -135,9 +135,8 @@ const config: CapacitorConfig  = {
   appId: '${config.appId ? config.appId : "com.saltcorn.mobile.app"}',
   appName: '${config.appName ? config.appName : "SaltcornMobileApp"}',
   webDir: "www",
-  ios: {
-    scheme: "SaltcornMobileApp",
-  },
+  // ios.limitsNavigationsToAppBoundDomains was dropped - it caused noisy
+  // script-injection warnings and wasn't needed for the cookie fix to work.
   android: {
     buildOptions: {
       ${
@@ -153,15 +152,26 @@ const config: CapacitorConfig  = {
     },
     ${config.unsecureNetwork ? "allowMixedContent: true," : ""}
   },
-  ${
-    config.unsecureNetwork
-      ? `server: {
-    cleartext: true,
-    androidScheme: 'http',
-  },`
-      : ""
-  }
+  server: {
+    // App's origin on iOS - must match MOBILE_APP_ORIGINS in server/app.js.
+    iosScheme: 'SaltcornMobileApp',
+    ${
+      config.unsecureNetwork
+        ? `cleartext: true,
+    androidScheme: 'http',`
+        : ""
+    }
+  },
   plugins: {
+    // Needed together with WKAppBoundDomains + limitsNavigationsToAppBoundDomains
+    // above (see modifyInfoPlist) to exempt the remote server's session
+    // cookie from iOS's third-party cookie blocking.
+    CapacitorHttp: {
+      enabled: true,
+    },
+    CapacitorCookies: {
+      enabled: true,
+    },
     CapacitorSQLite: {
       iosDatabaseLocation: 'Library/CapacitorDatabase',
       iosIsEncryption: true,
@@ -715,6 +725,8 @@ export function prepareExportOptionsPlist({ buildDir, appId, iosParams }: any) {
  * @param pushSyncEnabled add remote-notification background mode
  * @param allowClearTextTraffic allow arbitrary HTTP loads
  * @param backgroundFetchEnabled background.js is included (sync or heartbeat configured)
+ * @param serverURL server URL, added to WKAppBoundDomains for the iOS cookie
+ * fix - changing servers (e.g. a new ngrok URL) needs a rebuild to apply.
  */
 export function modifyInfoPlist(
   buildDir: string,
@@ -722,10 +734,19 @@ export function modifyInfoPlist(
   backgroundSyncEnabled: boolean,
   pushSyncEnabled: boolean,
   allowClearTextTraffic: boolean,
-  backgroundFetchEnabled: boolean = false
+  backgroundFetchEnabled: boolean = false,
+  serverURL?: string
 ) {
   const infoPlist = join(buildDir, "ios", "App", "App", "Info.plist");
   const content = readFileSync(infoPlist, "utf8");
+  let appBoundHostname: string | undefined;
+  if (serverURL) {
+    try {
+      appBoundHostname = new URL(serverURL).hostname;
+    } catch {
+      // invalid/missing URL - skip WKAppBoundDomains rather than write a broken plist
+    }
+  }
 
   const backgroundModes = [
     ...(backgroundFetchEnabled ? ["fetch", "processing"] : []),
@@ -735,7 +756,9 @@ export function modifyInfoPlist(
   const taskIds = [
     "com.transistorsoft.fetch",
     ...(backgroundSyncEnabled ? ["com.transistorsoft.background_sync"] : []),
-    ...(backgroundFetchEnabled ? ["com.transistorsoft.push_sync_heartbeat"] : []),
+    ...(backgroundFetchEnabled
+      ? ["com.transistorsoft.push_sync_heartbeat"]
+      : []),
   ];
 
   const newCfgs = `
@@ -772,6 +795,14 @@ export function modifyInfoPlist(
   <true/>
   <key>LSSupportsOpeningDocumentsInPlace</key>
   <true/>
+  ${
+    appBoundHostname
+      ? `<key>WKAppBoundDomains</key>
+  <array>
+    <string>${appBoundHostname}</string>
+  </array>`
+      : ""
+  }
   ${
     allowShareTo
       ? `<key>CFBundleURLTypes</key>
@@ -1143,7 +1174,10 @@ export function copyServerFiles(buildDir: string) {
   if (!existsSync(assetsDst)) {
     mkdirSync(assetsDst, { recursive: true });
   }
-  const serverRoot = join(require.resolve("@saltcorn/server/package.json"), "..");
+  const serverRoot = join(
+    require.resolve("@saltcorn/server/package.json"),
+    ".."
+  );
   const srcPrefix = join(serverRoot, "public");
   const srcAssests = [
     "jquery-3.6.0.min.js",

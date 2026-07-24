@@ -1,6 +1,21 @@
 /*eslint-env browser*/
 /*global $, KTDrawer, reload_embedded_view, submitWithEmptyAction, is_paging_param, bootstrap, common_done, unique_field_from_rows, inline_submit_success, get_current_state_url, initialize_page, reset_spinners */
 
+// Tapping a javascript: link silently does nothing on iOS, so we run the
+// code ourselves instead of relying on the link to do it.
+document.addEventListener("click", function (event) {
+  const link =
+    event.target.closest && event.target.closest("a[href^='javascript:']");
+  if (!link) return;
+  event.preventDefault();
+  const code = link.getAttribute("href").slice("javascript:".length);
+  try {
+    (0, eval)(code);
+  } catch (error) {
+    console.error("Error executing javascript: link:", error);
+  }
+});
+
 function combineFormAndQuery(form, query) {
   let paramsList = [];
   const formData = new FormData(form[0]);
@@ -678,10 +693,12 @@ async function make_unique_field(
 function openFile(fileId) {
   const config = parent.saltcorn.data.state.getState().mobileConfig;
   const serverPath = config.server_path;
-  const token = config.jwt;
-  const url = `${serverPath}/files/serve/${encodeURIComponent(
-    fileId
-  )}?jwt=${token}`;
+  // TODO: session-based auth doesn't carry into this InAppBrowser - it's a
+  // separate browser context and may not share the main WebView's cookie
+  // jar. The old ?jwt= query param worked around that; protected files may
+  // now fail to open here until this gets its own solution (e.g. a
+  // short-lived signed download URL minted server-side).
+  const url = `${serverPath}/files/serve/${encodeURIComponent(fileId)}`;
   parent.cordova.InAppBrowser.open(
     url,
     "_blank",

@@ -569,7 +569,7 @@ class File {
   static subClassIfTenant(): typeof File {
     const tenant = db.getTenantSchema();
     const isRoot = tenant === db.connectObj.default_schema;
-    
+
     if (isRoot) return File;
 
     const fileStoreBase = path.join(db.connectObj.file_store, tenant);
@@ -1220,16 +1220,17 @@ class File {
     const state = getState()!;
     const base_url = state.getConfig("base_url") || "http://10.0.2.2:3000";
     const url = `${base_url}/files/upload`;
-    const token = state.mobileConfig!.jwt;
+    const csrfToken = state.mobileConfig?.csrfToken;
     const formData = new FormData();
     formData.append("file", file.blob, file.fileObj.name);
     const response = await axios.post(url, formData, {
       headers: {
         "Content-Type": "multipart/form-data",
-        Authorization: `jwt ${token}`,
+        ...(csrfToken ? { "CSRF-Token": csrfToken } : {}),
         "X-Requested-With": "XMLHttpRequest",
         "X-Saltcorn-Client": "mobile-app",
       },
+      withCredentials: true,
     });
     return response.data.success;
   }

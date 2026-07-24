@@ -549,6 +549,53 @@ const loginWithJwt = async (
 };
 
 /**
+ * Establishes a session-cookie based login for the mobile app, given
+ * already-verified credentials (used to auto-login right after signup).
+ */
+const loginWithSession = async (
+  email: string,
+  password: string,
+  saltcornApp: string,
+  res: Res,
+  req: Req
+) => {
+  const loginFn = async () => {
+    const user = (await User.findOne({ email }))!;
+    if (
+      user &&
+      !user.disabled &&
+      user.auth_method_allowed("Password") &&
+      user.checkPassword(password) &&
+      !user._attributes.totp_enabled
+    ) {
+      req.login(user.session_object, async (loginErr: any) => {
+        if (loginErr) {
+          res.status(500).json({ error: req.__("Login failed") });
+          return;
+        }
+        // see the matching note in the /login-with/session route
+        if (req.session?.cookie) {
+          req.session.cookie.sameSite = "none";
+          req.session.cookie.secure = true;
+        }
+        if (!user.last_mobile_login)
+          await user.updateLastMobileLogin(new Date());
+        res.json({ success: true, user: user.session_object });
+      });
+    } else {
+      res.status(401).json({
+        error: req.__("Incorrect user or password"),
+      });
+    }
+  };
+  if (saltcornApp && saltcornApp !== db.connectObj.default_schema) {
+    await db.runWithTenant(saltcornApp, loginFn);
+  } else {
+    await loginFn();
+  }
+};
+
+/**
  * GET /auth/login
  * @name get/login
  * @function
@@ -607,24 +654,28 @@ router.get("/logout", async (req: Req, res: Res, next: any) => {
   if (req.smr && req.user?.id) {
     const user = (await User.findOne({ id: req.user!.id }))!;
     await user.updateLastMobileLogin(null);
-    res.json({ success: true });
-  } else if (req.logout) {
+  }
+  if (req.logout) {
     req.logout(function (err: any) {
       const destination = getState()!.getConfig("logout_url", "/auth/login");
+      const respond = () =>
+        req.smr ? res.json({ success: true }) : res.redirect(destination);
       if (req.session.destroy)
         req.session.destroy((err: any) => {
           if (err) return next(err);
           req.logout(() => {
-            res.redirect(destination);
+            respond();
           });
         });
       else {
         req.logout(function (err: any) {
           req.session = null;
-          res.redirect(destination);
+          respond();
         });
       }
     });
+  } else if (req.smr) {
+    res.json({ success: true });
   }
 });
 
@@ -1444,7 +1495,7 @@ router.post(
         const u: any = await User.create(form.values);
         await send_verification_email(u, req);
         if (req.smr)
-          await loginWithJwt(
+          await loginWithSession(
             email,
             password,
             req.headers["x-saltcorn-app"],
@@ -1608,6 +1659,50 @@ router.post(
 );
 
 /**
+ * Session-based login for the mobile app. Logs in like a normal web
+ * session, but replies with JSON. Needs a CSRF token from GET /auth/csrf-token first.
+ * @name post/login-with/session
+ * @function
+ * @memberof module:auth/routes~routesRouter
+ */
+router.post(
+  "/login-with/session",
+  ipLimiter,
+  userLimiter,
+  setOldSessionID,
+  (req: Req, res: Res, next: any) => {
+    passport.authenticate("local", (err: any, user: any) => {
+      if (err) return next(err);
+      if (!user) {
+        return res
+          .status(401)
+          .json({ error: req.__("Incorrect user or password") });
+      }
+      if (user.pending_user) {
+        return res.status(401).json({
+          error: req.__(
+            "Two-factor authentication is not yet supported for the mobile app"
+          ),
+        });
+      }
+      req.login(user, async (loginErr: any) => {
+        if (loginErr) return next(loginErr);
+        if (req.session?.cookie) {
+          req.session.cookie.sameSite = "none";
+          req.session.cookie.secure = true;
+        }
+        ipLimiter.resetKey(req.ip);
+        userLimiter.resetKey(userIdKey(req.body || {}));
+        const dbUser = (await User.findOne({ id: user.id }))!;
+        if (!dbUser.last_mobile_login)
+          await dbUser.updateLastMobileLogin(new Date());
+        res.json({ success: true, user });
+      });
+    })(req, res, next);
+  }
+);
+
+/**
  * @name post/renew-jwt
  * @function
  * @memberof module:auth/routes~routesRouter
@@ -1663,6 +1758,19 @@ router.get(
   error_catcher((req: Req, res: Res, next: any) => {
     const isAuth = req.user && req.user!.id ? true : false;
     res.json({ authenticated: isAuth });
+  })
+);
+
+/**
+ * Returns a CSRF token for clients that can't get one from a rendered
+ * page, like the mobile app. Re-fetch after login/logout.
+ * @name get/csrf-token
+ */
+router.get(
+  "/csrf-token",
+  error_catcher(async (req: Req, res: Res) => {
+    const token = req.csrfToken ? req.csrfToken() : "";
+    res.json({ csrfToken: token });
   })
 );
 

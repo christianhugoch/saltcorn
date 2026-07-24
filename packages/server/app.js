@@ -57,6 +57,17 @@ import PluginRoutesHandler from "./plugin_routes_handler.js";
 import compression from "compression";
 
 const locales = Object.keys(available_languages);
+
+// Fixed origins the mobile app's WebView loads its content from - the same
+// for every build, so it's safe to grant them credentialed CORS.
+// Compared case-insensitively below, and the iOS entry is lowercased -
+// double check it matches once tested on a real device.
+const MOBILE_APP_ORIGINS = new Set([
+  "https://localhost", // Android (default secure scheme)
+  "http://localhost", // Android emulator/unsecureNetwork dev builds
+  "saltcornmobileapp://localhost", // iOS
+]);
+
 // jwt config
 const jwt_secret = db.connectObj.jwt_secret;
 const jwt_extractor = ExtractJwt.fromExtractors([
@@ -154,7 +165,24 @@ const getApp = async (opts = {}) => {
   app.use(helmet(helmetOptions));
   app.use(compression());
   // TODO ch find a better solution
-  if (getState().getConfig("cors_enabled", true)) app.use(cors());
+  if (getState().getConfig("cors_enabled", true)) {
+    // Only the known mobile-app origins get credentials:true - never combine
+    // that with allowing any origin, or any website could read cookie data.
+    const mobileCors = cors({
+      origin: (origin, cb) =>
+        cb(null, MOBILE_APP_ORIGINS.has((origin || "").toLowerCase())),
+      credentials: true,
+    });
+    const openCors = cors();
+    app.use((req, res, next) => {
+      if (
+        req.headers.origin &&
+        MOBILE_APP_ORIGINS.has(req.headers.origin.toLowerCase())
+      )
+        mobileCors(req, res, next);
+      else openCors(req, res, next);
+    });
+  }
   const bodyLimit = getState().getConfig("body_limit");
   app.use(
     express.json({
@@ -422,6 +450,10 @@ const getApp = async (opts = {}) => {
   app.use(function (req, res, next) {
     if (req.headers["x-saltcorn-client"] === "mobile-app") {
       req.smr = true; // saltcorn-mobile-request
+      if (req.session?.cookie) {
+        req.session.cookie.sameSite = "none";
+        req.session.cookie.secure = true;
+      }
     }
     if (req.headers["x-saltcorn-client"] === "react-view") {
       req.rvr = true; // react-view-request
@@ -474,7 +506,8 @@ const getApp = async (opts = {}) => {
         return disabledCsurf(req, res, next);
       csurf(req, res, next);
     });
-  } else app.use(disabledCsurf);
+  } else 
+    app.use(disabledCsurf);
 
   app.use("/api", api);
   app.use("/scapi", scapi);
