@@ -133,6 +133,11 @@ const transposeObjects = (objs: Row[]): Row => {
   }
   return res;
 };
+// A numeric-looking ref bound as a sqlite query param can get rebound as
+// REAL by the iOS capacitor sqlite plugin, which then stores/compares as
+// e.g. "19.0" instead of "19" in the (TEXT-affinity) _sync_info.ref column -
+// embed it as a literal instead to sidestep the plugin's param typing.
+const sqlTextLiteral = (v: any): string => `'${String(v).replace(/'/g, "''")}'`;
 // todo support also other date formats https://momentjs.com/docs/
 const dateFormats = [moment.ISO_8601];
 // todo refactor - move to separated data utils module?
@@ -1252,14 +1257,10 @@ class Table implements AbstractTable {
             );
           } else {
             const pkVals = ids.map((row) => String(row[pkName]));
-            const placeholders = pkVals
-              .map((_: any, i: number) => `$${i + 1}`)
-              .join(",");
             await db.query(
               `update "${db.sqlsanitize(this.name)}_sync_info"
            set deleted = true, modified_local = true
-           where ref in (${placeholders})`,
-              pkVals
+           where ref in (${pkVals.map(sqlTextLiteral).join(",")})`
             );
           }
         }
@@ -2251,8 +2252,7 @@ class Table implements AbstractTable {
           await db.query(
             `insert into "${db.sqlsanitize(this.name)}_sync_info"
          (ref, modified_local, deleted)
-         values(CAST($1 AS TEXT), true, false)`,
-            [id]
+         values(${sqlTextLiteral(id)}, true, false)`
           );
         }
       },
@@ -2306,8 +2306,8 @@ class Table implements AbstractTable {
             `update "${db.sqlsanitize(
               this.name
             )}_sync_info" set modified_local = true
-         where ref = CAST($1 AS TEXT) and last_modified = $2`,
-            [id, oldLastModified ? oldLastModified.valueOf() : null]
+         where ref = ${sqlTextLiteral(id)} and last_modified = $1`,
+            [oldLastModified ? oldLastModified.valueOf() : null]
           );
         }
       },
@@ -2736,8 +2736,7 @@ class Table implements AbstractTable {
               await db.query(
                 `insert into "${db.sqlsanitize(this.name)}_sync_info"
            (last_modified, ref, modified_local, deleted)
-           values(NULL, CAST($1 AS TEXT), true, false)`,
-                [id]
+           values(NULL, ${sqlTextLiteral(id)}, true, false)`
               );
             }
           },

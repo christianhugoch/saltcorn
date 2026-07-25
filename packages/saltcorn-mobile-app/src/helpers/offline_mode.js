@@ -59,11 +59,12 @@ const insertRemoteData = async (table, rows, syncTimestamp) => {
     const ref = _sync_info_tbl_ref_,
       last_modified = _sync_info_tbl_last_modified_;
     await saltcorn.data.db.insert(tblName, rest, { replace: true });
-    const infos = await saltcorn.data.db.select(
-      `${saltcorn.data.db.sqlsanitize(tblName)}_sync_info`,
-      {
-        ref: String(rest[pkName]),
-      }
+    // ref is bound as a raw SQL literal (not a query param) because the iOS
+    // sqlite plugin silently rebinds numeric-looking string params as REAL,
+    // which then gets stored as "19.0" instead of "19" in this TEXT column.
+    const { rows: infos } = await saltcorn.data.db.query(
+      `select 1 from "${saltcorn.data.db.sqlsanitize(tblName)}_sync_info"
+         where ref=${sqlRef(rest[pkName])}`
     );
     if (infos.length > 0) {
       await saltcorn.data.db.query(
@@ -72,14 +73,10 @@ const insertRemoteData = async (table, rows, syncTimestamp) => {
                where ref=${sqlRef(rest[pkName])}`
       );
     } else {
-      await saltcorn.data.db.insert(
-        `${saltcorn.data.db.sqlsanitize(tblName)}_sync_info`,
-        {
-          ref: String(ref),
-          last_modified: syncTimestamp,
-          deleted: false,
-          modified_local: false,
-        }
+      await saltcorn.data.db.query(
+        `insert into "${saltcorn.data.db.sqlsanitize(tblName)}_sync_info"
+           (ref, last_modified, deleted, modified_local)
+           values (${sqlRef(ref)}, ${syncTimestamp}, false, false)`
       );
     }
   }
