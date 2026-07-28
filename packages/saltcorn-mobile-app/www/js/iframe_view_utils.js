@@ -718,15 +718,23 @@ async function make_unique_field(
   }
 }
 
-function openFile(fileId) {
+async function openFile(fileId) {
   const config = parent.saltcorn.data.state.getState().mobileConfig;
   const serverPath = config.server_path;
-  // TODO: session-based auth doesn't carry into this InAppBrowser - it's a
-  // separate browser context and may not share the main WebView's cookie
-  // jar. The old ?jwt= query param worked around that; protected files may
-  // now fail to open here until this gets its own solution (e.g. a
-  // short-lived signed download URL minted server-side).
-  const url = `${serverPath}/files/serve/${encodeURIComponent(fileId)}`;
+  // The InAppBrowser is a separate browser context that may not share the
+  // main WebView's session cookie, so a short-lived, single-use token minted
+  // through the (still-authenticated) WebView stands in for it here instead.
+  let url;
+  try {
+    const { token } = await parent.saltcorn.mobileApp.api.apiCall({
+      method: "GET",
+      path: `/files/serve-token/${encodeURIComponent(fileId)}`,
+    });
+    url = `${serverPath}/files/serve/${encodeURIComponent(fileId)}?token=${encodeURIComponent(token)}`;
+  } catch (error) {
+    parent.saltcorn.mobileApp.common.errorAlert(error);
+    return;
+  }
   parent.cordova.InAppBrowser.open(
     url,
     "_blank",

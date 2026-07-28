@@ -52,6 +52,7 @@ import stream from "stream";
 import _am_backup from "@saltcorn/admin-models/models/backup";
 const { extract } = _am_backup;
 import createDOMPurify from "dompurify";
+import { v4 as uuidv4 } from "uuid";
 import { Req, Res } from "@saltcorn/types/base_types";
 /**
  * @type {object}
@@ -62,6 +63,41 @@ import { Req, Res } from "@saltcorn/types/base_types";
  */
 const router = Router();
 export default router;
+
+// Short-lived, single-use tokens for serving a file without a session
+// cookie - e.g. the mobile app's InAppBrowser is a separate browser context
+// that may not share the main WebView's session, so it mints one of these
+// via /serve-token first, then passes it to /serve as ?token=.
+const fileAccessTokens = new Map<
+  string,
+  { servePath: string; userId?: number; roleId: number; expires: number }
+>();
+const FILE_TOKEN_TTL_MS = 60 * 1000;
+
+function mintFileAccessToken(
+  servePath: string,
+  user: { id?: number; role_id: number }
+): string {
+  const token = uuidv4();
+  fileAccessTokens.set(token, {
+    servePath,
+    userId: user.id,
+    roleId: user.role_id,
+    expires: Date.now() + FILE_TOKEN_TTL_MS,
+  });
+  return token;
+}
+
+function redeemFileAccessToken(
+  token: string,
+  servePath: string
+): { userId?: number; roleId: number } | null {
+  const entry = fileAccessTokens.get(token);
+  if (entry) fileAccessTokens.delete(token); // single-use regardless of outcome
+  if (!entry || entry.expires < Date.now() || entry.servePath !== servePath)
+    return null;
+  return { userId: entry.userId, roleId: entry.roleId };
+}
 
 router.use(
   error_catcher(async (req: Req, res: Res, next: any) => {
@@ -388,6 +424,36 @@ router.get(
 );
 
 /**
+ * Mint a short-lived, single-use token for a file the caller is currently
+ * authorized to read, so a later /serve request can be authorized without a
+ * session cookie (see the mobile InAppBrowser comment on fileAccessTokens
+ * above). Requires the same session-based authorization /serve itself uses.
+ * @name get/serve-token/:id
+ * @function
+ * @memberof module:routes/files~filesRouter
+ * @function
+ */
+router.get(
+  "/serve-token/*serve_path",
+  error_catcher(async (req: Req, res: Res) => {
+    const role = req.user && req.user!.id ? req.user!.role_id : 100;
+    const user_id = req.user && req.user!.id;
+    const serve_path = path.join(...req.params.serve_path);
+    const file = await File.findOne(serve_path);
+    if (
+      file &&
+      (role <= file.min_role_read || (user_id && user_id === file.user_id))
+    ) {
+      res.json({
+        token: mintFileAccessToken(serve_path, { id: user_id, role_id: role }),
+      });
+    } else {
+      res.status(403).json({ error: req.__("Not authorized") });
+    }
+  })
+);
+
+/**
  * @name get/serve/:id
  * @function
  * @memberof module:routes/files~filesRouter
@@ -396,9 +462,19 @@ router.get(
 router.get(
   "/serve/*serve_path",
   error_catcher(async (req: Req, res: Res) => {
-    const role = req.user && req.user!.id ? req.user!.role_id : 100;
-    const user_id = req.user && req.user!.id;
     const serve_path = path.join(...req.params.serve_path);
+    let role = req.user && req.user!.id ? req.user!.role_id : 100;
+    let user_id = req.user && req.user!.id;
+    const token = req.query.token as string | undefined;
+    if (token) {
+      const redeemed = redeemFileAccessToken(token, serve_path);
+      if (!redeemed) {
+        res.status(401).json({ error: req.__("Invalid or expired token") });
+        return;
+      }
+      role = redeemed.roleId;
+      user_id = redeemed.userId;
+    }
     //let file: any;
     //if (typeof strictParseInt(id) !== "undefined")
     const file = (await File.findOne(serve_path))!;
