@@ -1228,6 +1228,11 @@ class File {
   static async upload(
     file: { blob: Blob; fileObj: any } | (Blob & { name?: string })
   ): Promise<any> {
+
+    console.log("## upload");
+    console.log(file);
+    
+
     const state = getState()!;
     const serverUrl = state.mobileConfig?.server_path;
     if (!serverUrl) throw new Error("mobileConfig.server_path is not set");
@@ -1248,18 +1253,26 @@ class File {
     // Uploaded via @capacitor/file-transfer, not fetch, to avoid a plugin
     // conflict that breaks file uploads. It needs a file on disk, so we
     // write the blob to a temp file and remove it once the upload is done.
+    console.log("## before");
+    
     const { Filesystem, FileTransfer } = (globalThis as any).Capacitor.Plugins;
     const tmpPath = `upload_${Date.now()}_${filename}`;
+    console.log(tmpPath);
+    
     await Filesystem.writeFile({
       path: tmpPath,
       data: await blobToBase64(blob),
       directory: "CACHE", // Directory.Cache
     });
+    console.log("done");
+    
     try {
       const { uri } = await Filesystem.getUri({
         path: tmpPath,
         directory: "CACHE",
       });
+      console.log("uri", uri);
+      
       const result = await FileTransfer.uploadFile({
         url,
         path: uri,

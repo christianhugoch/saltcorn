@@ -35,33 +35,60 @@ class ShareViewController: UIViewController {
         }.flatMap({ $0 })
         var urlComps = URLComponents(string: "scappscheme://")!
         urlComps.queryItems = queryItems
+        print("sendData: \(shareItems.count) item(s), opening \(urlComps.url?.absoluteString ?? "<nil>")")
         openURL(urlComps.url!)
     }
 
     fileprivate func createSharedFileUrl(_ url: URL?) -> String {
-        let fileManager = FileManager.default
+        print("createSharedFileUrl: source=\(url?.absoluteString ?? "<nil>")")
+        guard let url = url else { return "" }
+        guard let containerURL = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: "YOUR_APP_GROUP_ID"
+        ) else {
+            print("createSharedFileUrl: no App Group container")
+            return ""
+        }
+        // appendingPathComponent handles escaping correctly on its own -
+        // hand-building a percent-encoded string here and then encoding it
+        // *again* as a URLQueryItem value in sendData() double-encoded it,
+        // so the path JS received didn't match any real file
+        let destinationURL = containerURL.appendingPathComponent(url.lastPathComponent)
+        print("createSharedFileUrl: destination=\(destinationURL.absoluteString)")
 
-        let copyFileUrl =
-        fileManager.containerURL(forSecurityApplicationGroupIdentifier: "YOUR_APP_GROUP_ID")!
-            .absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)! + url!
-            .lastPathComponent.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
-        try? Data(contentsOf: url!).write(to: URL(string: copyFileUrl)!)
-
-        return copyFileUrl
+        // files vended by the Files app (iCloud, other apps' sandboxes) need
+        // this before they can actually be read - without it, Data(contentsOf:)
+        // fails and this used to silently return a path to a file that was
+        // never written
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+        print("createSharedFileUrl: startAccessingSecurityScopedResource=\(didStartAccessing)")
+        defer {
+            if didStartAccessing { url.stopAccessingSecurityScopedResource() }
+        }
+        do {
+            try Data(contentsOf: url).write(to: destinationURL)
+            print("createSharedFileUrl: wrote file successfully")
+            return destinationURL.absoluteString
+        } catch {
+            print("createSharedFileUrl: failed: \(error)")
+            return ""
+        }
     }
 
     func saveScreenshot(_ image: UIImage, _ index: Int) -> String {
-        let fileManager = FileManager.default
-
-        let copyFileUrl =
-        fileManager.containerURL(forSecurityApplicationGroupIdentifier: "YOUR_APP_GROUP_ID")!
-            .absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
-        + "/screenshot_\(index).png"
+        guard let containerURL = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: "YOUR_APP_GROUP_ID"
+        ) else {
+            print("saveScreenshot: no App Group container")
+            return ""
+        }
+        let destinationURL = containerURL.appendingPathComponent("screenshot_\(index).png")
+        print("saveScreenshot: destination=\(destinationURL.absoluteString)")
         do {
-            try image.pngData()?.write(to: URL(string: copyFileUrl)!)
-            return copyFileUrl
+            try image.pngData()?.write(to: destinationURL)
+            print("saveScreenshot: wrote file successfully")
+            return destinationURL.absoluteString
         } catch {
-            print(error.localizedDescription)
+            print("saveScreenshot: failed: \(error.localizedDescription)")
             return ""
         }
     }
@@ -70,16 +97,21 @@ class ShareViewController: UIViewController {
     async throws -> ShareItem
     {
         let results = try await attachment.loadItem(forTypeIdentifier: kUTTypeURL as String, options: nil)
-        let url = results as! URL?
+        guard let url = results as? URL else {
+            throw NSError(domain: "ShareViewController", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "handleTypeUrl: expected a URL, got \(type(of: results))"
+            ])
+        }
+        print("handleTypeUrl: url=\(url.absoluteString) isFileURL=\(url.isFileURL)")
         let shareItem: ShareItem = ShareItem()
 
-        if url!.isFileURL {
-            shareItem.title = url!.lastPathComponent
-            shareItem.type = "application/" + url!.pathExtension.lowercased()
+        if url.isFileURL {
+            shareItem.title = url.lastPathComponent
+            shareItem.type = "application/" + url.pathExtension.lowercased()
             shareItem.url = createSharedFileUrl(url)
         } else {
-            shareItem.title = url!.absoluteString
-            shareItem.url = url!.absoluteString
+            shareItem.title = url.absoluteString
+            shareItem.url = url.absoluteString
             shareItem.type = "text/plain"
         }
 
@@ -92,6 +124,7 @@ class ShareViewController: UIViewController {
         let results = try await attachment.loadItem(forTypeIdentifier: kUTTypeText as String, options: nil)
         let shareItem: ShareItem = ShareItem()
         let text = results as! String
+        print("handleTypeText: text=\(text)")
         shareItem.title = text
         shareItem.type = "text/plain"
         return shareItem
@@ -103,9 +136,14 @@ class ShareViewController: UIViewController {
         let results = try await attachment.loadItem(forTypeIdentifier: kUTTypeMovie as String, options: nil)
         let shareItem: ShareItem = ShareItem()
 
-        let url = results as! URL?
-        shareItem.title = url!.lastPathComponent
-        shareItem.type = "video/" + url!.pathExtension.lowercased()
+        guard let url = results as? URL else {
+            throw NSError(domain: "ShareViewController", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "handleTypeMovie: expected a URL, got \(type(of: results))"
+            ])
+        }
+        print("handleTypeMovie: url=\(url.absoluteString)")
+        shareItem.title = url.lastPathComponent
+        shareItem.type = "video/" + url.pathExtension.lowercased()
         shareItem.url = createSharedFileUrl(url)
         return shareItem
     }
@@ -114,6 +152,7 @@ class ShareViewController: UIViewController {
     async throws -> ShareItem
     {
         let data = try await attachment.loadItem(forTypeIdentifier: kUTTypeImage as String, options: nil)
+        print("handleTypeImage: data type=\(type(of: data))")
 
         let shareItem: ShareItem = ShareItem()
             switch data {
@@ -126,7 +165,7 @@ class ShareViewController: UIViewController {
                     shareItem.type = "image/" + url.pathExtension.lowercased()
                     shareItem.url = self.createSharedFileUrl(url)
                 default:
-                    print("Unexpected image data:", type(of: data))
+                    print("handleTypeImage: unexpected image data type: \(type(of: data))")
         }
         return shareItem
     }
@@ -137,35 +176,45 @@ class ShareViewController: UIViewController {
         shareItems.removeAll()
 
         let extensionItem = extensionContext?.inputItems[0] as! NSExtensionItem
+        print("viewDidLoad: \(extensionItem.attachments?.count ?? 0) attachment(s)")
         Task {
-            try await withThrowingTaskGroup(
-                of: ShareItem.self,
-                body: { taskGroup in
+            do {
+                try await withThrowingTaskGroup(
+                    of: ShareItem.self,
+                    body: { taskGroup in
 
-                    for (index, attachment) in extensionItem.attachments!.enumerated() {
-                        if attachment.hasItemConformingToTypeIdentifier(kUTTypeURL as String) {
-                            taskGroup.addTask {
-                                return try await self.handleTypeUrl(attachment)
-                            }
-                        } else if attachment.hasItemConformingToTypeIdentifier(kUTTypeText as String) {
-                            taskGroup.addTask {
-                                return try await self.handleTypeText(attachment)
-                            }
-                        } else if attachment.hasItemConformingToTypeIdentifier(kUTTypeMovie as String) {
-                            taskGroup.addTask {
-                                return try await self.handleTypeMovie(attachment)
-                            }
-                        } else if attachment.hasItemConformingToTypeIdentifier(kUTTypeImage as String) {
-                            taskGroup.addTask {
-                                return try await self.handleTypeImage(attachment, index)
+                        for (index, attachment) in extensionItem.attachments!.enumerated() {
+                            print("viewDidLoad: attachment[\(index)] types=\(attachment.registeredTypeIdentifiers)")
+                            if attachment.hasItemConformingToTypeIdentifier(kUTTypeURL as String) {
+                                taskGroup.addTask {
+                                    return try await self.handleTypeUrl(attachment)
+                                }
+                            } else if attachment.hasItemConformingToTypeIdentifier(kUTTypeText as String) {
+                                taskGroup.addTask {
+                                    return try await self.handleTypeText(attachment)
+                                }
+                            } else if attachment.hasItemConformingToTypeIdentifier(kUTTypeMovie as String) {
+                                taskGroup.addTask {
+                                    return try await self.handleTypeMovie(attachment)
+                                }
+                            } else if attachment.hasItemConformingToTypeIdentifier(kUTTypeImage as String) {
+                                taskGroup.addTask {
+                                    return try await self.handleTypeImage(attachment, index)
+                                }
+                            } else {
+                                print("viewDidLoad: attachment[\(index)] has no matching handler")
                             }
                         }
-                    }
 
-                    for try await item in taskGroup {
-                        self.shareItems.append(item)
-                    }
-                })
+                        for try await item in taskGroup {
+                            self.shareItems.append(item)
+                        }
+                    })
+            } catch {
+                // a force-cast crash elsewhere wouldn't reach here - only
+                // thrown errors (e.g. the guard-let checks above) do
+                print("viewDidLoad: task group failed: \(error)")
+            }
 
             self.sendData()
             // only complete (letting the OS tear this extension down) once
@@ -180,11 +229,15 @@ class ShareViewController: UIViewController {
         var responder: UIResponder? = self
         while responder != nil {
             if let application = responder as? UIApplication {
-                application.open(url, options: [:], completionHandler: nil)
+                print("openURL: found UIApplication, opening")
+                application.open(url, options: [:], completionHandler: { success in
+                    print("openURL: open(_:options:) success=\(success)")
+                })
                 return
             }
             responder = responder?.next
         }
+        print("openURL: no UIApplication found in responder chain")
     }
 
 }

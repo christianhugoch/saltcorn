@@ -363,11 +363,17 @@ export class MobileBuilder {
       this.backgroundFetchEnabled,
       this.serverURL
     );
-    if (this.pushSync) {
+    // the App target needs its own entitlements file (and the app group in
+    // it) whenever it needs push, OR whenever the share extension needs to
+    // hand it files through a shared app group container - not just push
+    const appGroupId =
+      this.iosParams?.shareExtensionProvisioningProfile?.appGroupId;
+    if (this.pushSync || (this.allowShareTo && appGroupId)) {
       writeEntitlementsPlist(
         this.buildDir,
         this.buildType,
-        this.iosParams?.shareExtensionProvisioningProfile?.appGroupId
+        this.pushSync,
+        appGroupId
       );
       injectCodeSignEntitlements(this.buildDir);
     }
